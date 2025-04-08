@@ -6,11 +6,11 @@
 #property copyright "Yong-su, Kim"
 #property link      "https://www.mql5.com"
 
-//#include <BSPV7/ExternVariables.mqh>
-//#include <BSPV7/CommonV7.mqh>
-//#include <BSPV7/ReadyCheckV7.mqh>
-//#include <BSPV7/MagicNumberV7.mqh>
-//#include <BSPV7/MoneyManageV7.mqh>
+//#include <BSPV8/ExternVariables.mqh>
+//#include <BSPV8/CommonV8.mqh>
+//#include <BSPV8/ReadyCheckV8.mqh>
+//#include <BSPV8/MagicNumberV8.mqh>
+//#include <BSPV8/MoneyManageV8.mqh>
 
 
 //------------------------------------------------------------------------
@@ -34,168 +34,18 @@ position_Mode CloseSignal(int m_Session)
 {  
    position_Mode m_PositionMode=NoAction;
    
-   if( CurBar==ReOC[m_Session].LCBar )     m_PositionMode=LongCounter;
-   if( CurBar==ReOC[m_Session].DLRBar )    m_PositionMode=DoubleLongReverse;
-   if( CurBar==ReOC[m_Session].DLRCConBar) m_PositionMode=DLRCCon;
-   if( CurBar==ReOC[m_Session].EndBar)     m_PositionMode=End;
+   if( CurBar==ReOC[m_Session].LRBar )      m_PositionMode=LongReverse;  
+   if( CurBar==ReOC[m_Session].LRConBar )   m_PositionMode=LongReverseCon;
+   if( CurBar==ReOC[m_Session].LCBar )      m_PositionMode=LongCounter;   
+   if( CurBar==ReOC[m_Session].LCConBar )   m_PositionMode=LongCounterCon;   
+   if( CurBar==ReOC[m_Session].DLRBar)      m_PositionMode=DoubleLongReverse;   
+   if( CurBar==ReOC[m_Session].DLRConBar )  m_PositionMode=DLRCon;
+   if( CurBar==ReOC[m_Session].DLRCConBar ) m_PositionMode=DLRCCon;
+   if( CurBar==ReOC[m_Session].EndBar)      m_PositionMode=End;
 
    return(m_PositionMode);
 }
 
-
-//-------------------------------------------------------------------------
-void MyOpenPosition(int m_Session)
-{
-   position_ID m_PositionID=No_Signal;
-   ENUM_POSITION_TYPE m_PositionType=POSITION_TYPE_BUY;
-   double m_LotSizeMulti=1.0;
-   trend m_Trend=NoTrend;
-
-     
-   if(CurPM[m_Session]==LongReverse)
-     {
-      if(OpenReady[m_Session].BuyTrendReady)
-        {
-         m_PositionID=Buy_LR;
-         m_PositionType=POSITION_TYPE_BUY;  
-        } 
-      else if(OpenReady[m_Session].SellTrendReady)
-        {
-         m_PositionID=Sell_LR;
-         m_PositionType=POSITION_TYPE_SELL;  
-        }
-     }
-   else if(CurPM[m_Session]==LongCounter)   //Caution OpenPosition at DLRCCon---
-     {
-      if(PositionSummary[m_Session].firstPositionTrend==UpTrend) 
-        {
-         m_PositionID=Sell_LC;
-         m_PositionType=POSITION_TYPE_SELL;
-        }
-      else 
-        {
-         m_PositionID=Buy_LC;
-         m_PositionType=POSITION_TYPE_BUY;
-        }     
-     }  
-   else if(CurPM[m_Session]==DoubleLongReverse)
-     {
-      if(PositionSummary[m_Session].firstPositionTrend==UpTrend) 
-        {
-         m_PositionID=Buy_DLR;
-         m_PositionType=POSITION_TYPE_BUY;
-        }
-      else 
-        {
-         m_PositionID=Sell_DLR;
-         m_PositionType=POSITION_TYPE_SELL;
-        }     
-     }
-
-
-   if(CurPM[m_Session]==LongReverseCon || CurPM[m_Session]==DLRCon  || 
-      CurPM[m_Session]==LongCounterCon || CurPM[m_Session]==DLRCCon  )
-     {      
-      if(PositionSummary[m_Session].firstPositionTrend==UpTrend) 
-        {
-         if(CurPM[m_Session]==LongReverseCon || CurPM[m_Session]==DLRCon)
-           { 
-            if(CurPM[m_Session]==LongReverseCon)  m_PositionID=Buy_LR;
-            else if(CurPM[m_Session]==DLRCon)  m_PositionID=Buy_DLR;
-            
-            m_PositionType=POSITION_TYPE_BUY;
-            m_Trend=UpTrend;
-           } 
-         else
-           {
-            if(CurPM[m_Session]==LongCounterCon)  m_PositionID=Sell_LC;
-            else if(CurPM[m_Session]==DLRCCon)  m_PositionID=Sell_DLRCC;
-            
-            m_PositionType=POSITION_TYPE_SELL;
-            m_Trend=DownTrend;
-           } 
-        }
-      else 
-        {
-         if(CurPM[m_Session]==LongReverseCon || CurPM[m_Session]==DLRCon )
-           {
-            if(CurPM[m_Session]==LongReverseCon)  m_PositionID=Sell_LR;
-            else if(CurPM[m_Session]==DLRCon)  m_PositionID=Sell_DLR;
-            
-            m_PositionType=POSITION_TYPE_SELL;
-            m_Trend=DownTrend;
-           } 
-         else
-           {
-            if(CurPM[m_Session]==LongCounterCon)  m_PositionID=Buy_LC;
-            else if(CurPM[m_Session]==DLRCCon)  m_PositionID=Buy_DLRCC;
-            
-            m_PositionType=POSITION_TYPE_BUY;
-            m_Trend=UpTrend;
-           } 
-        }
-      PositionSummary[m_Session].pyramidStarted=true;  
-      m_LotSizeMulti=m_LotSizeMulti*PyramidGloConst.pydStartSizeMulti;
-      PositionSummary[m_Session].pyramidPID=m_PositionID;
-      PositionSummary[m_Session].pyramidTrend=m_Trend;  
-      PositionSummary[m_Session].lastWmaS=WmaSValue;
-     }        
-   
-   if(m_Trend==NoTrend)
-      m_LotSizeMulti = m_LotSizeMulti*t_NonPyramidMulti;
-   
-   if(m_PositionID!=No_Signal)
-     {
-      OpenPositionByPID(m_PositionType, m_LotSizeMulti, m_Session, m_PositionID);
-     }    
-     
-   return;     
-}
-
-
-//-----------------------------------------------------------------------
-void MyClosePosition(int m_Session)
-{
-   
-   if(CurPM[m_Session]!=End &&
-      PositionSummary[m_Session].firstPositionTrend==UpTrend) 
-     {
-      if( (CurPM[m_Session]==LongCounter) || (CurPM[m_Session]==LongCounterCon) )
-        {
-         ClosePositionByPID(m_Session, Buy_LR);
-        }
-      else if( (CurPM[m_Session]==DoubleLongReverse) || (CurPM[m_Session]==DLRCon) )
-        {
-         ClosePositionByPID(m_Session, Sell_LC);
-        }
-      else if(CurPM[m_Session]==DLRCCon)
-        {
-         ClosePositionByPID(m_Session, Buy_DLR);        
-        } 
-     }
-   else if(CurPM[m_Session]!=End &&
-           PositionSummary[m_Session].firstPositionTrend==DownTrend)
-     {
-      if( (CurPM[m_Session]==LongCounter) || (CurPM[m_Session]==LongCounterCon) )
-        {
-         ClosePositionByPID(m_Session, Sell_LR);
-        }
-      else if( (CurPM[m_Session]==DoubleLongReverse) || (CurPM[m_Session]==DLRCon) )
-        {
-         ClosePositionByPID(m_Session, Buy_LC);
-        }
-      else if(CurPM[m_Session]==DLRCCon)
-        {
-         ClosePositionByPID(m_Session, Sell_DLR);        
-        } 
-     }              
-   else if(CurPM[m_Session]==End) 
-     {
-      ClosePositionBySession(m_Session);
-     } 
-   
-   return;     
-}
 
 //--------------------------------------------------------------------------
 void CloseAllPositions(void)
@@ -210,10 +60,8 @@ void CloseAllPositions(void)
          OpenReadyReset(m_Session);
         }
      }   
-   SessionMan.LastSession=0;
-   SessionMan.CurSession=0;
-   SessionMan.CanGoBand=true;
-   SessionMan.CanGoTrend=true;
+  
+  InitSessionMan();
    
    return;
 }
@@ -242,8 +90,7 @@ void ClosePositionBySession(int m_Session)
    MNInitByPID(m_Session, AllID);  
    ReOCReset(m_Session);  
    InitPositionSum(m_Session); 
-   CurPM[m_Session]=NoMode;
-   BeforePM[m_Session]=NoMode;
+   InitPM(m_Session);
    
    return;
 }
@@ -286,8 +133,7 @@ void ClosePositionByPID(int m_Session, position_ID m_PositionID, bool isStopLoss
        {
          ReOCReset(m_Session);  
          InitPositionSum(m_Session); 
-         CurPM[m_Session]=NoMode;
-         BeforePM[m_Session]=NoMode;
+         InitPM(m_Session);
        } 
      }
 
@@ -365,7 +211,6 @@ bool OpenPosition(ENUM_POSITION_TYPE m_PositionType, int m_MagicNumber, double m
      }   
    else
      {
-      
       if(Trade.Sell(m_LotSize,_Symbol,0,slv,tpv,m_MNstring)) return(true); 
       else 
         {
@@ -400,16 +245,7 @@ void RegisterPosition(ENUM_POSITION_TYPE m_PositionType, int m_Session, position
    PositionSummary[m_Session].currentNumPositions++;
    PositionSummary[m_Session].totalSize += m_OpenSize;
    PositionSummary[m_Session].currentSize += m_OpenSize;
-   
-   PositionInfo[m_Session][(PositionSummary[m_Session].totalNumPositions-1)].openSequence = PositionSummary[m_Session].totalNumPositions;
-   PositionInfo[m_Session][(PositionSummary[m_Session].totalNumPositions-1)].isOpenNow = true;
-   PositionInfo[m_Session][(PositionSummary[m_Session].totalNumPositions-1)].positionTrend = m_Trend;
-   PositionInfo[m_Session][(PositionSummary[m_Session].totalNumPositions-1)].positionID = m_PositionID;
-   PositionInfo[m_Session][(PositionSummary[m_Session].totalNumPositions-1)].pMagicNumber = m_MagicNumber;
-   PositionInfo[m_Session][(PositionSummary[m_Session].totalNumPositions-1)].openBar = CurBar;
-   PositionInfo[m_Session][(PositionSummary[m_Session].totalNumPositions-1)].openVolume = Trade.ResultVolume();
-   PositionInfo[m_Session][(PositionSummary[m_Session].totalNumPositions-1)].openPrice = Trade.ResultPrice();
-   PositionInfo[m_Session][(PositionSummary[m_Session].totalNumPositions-1)].openWmaS = WmaSValue;   
+    
 }
 
 //---------------------------------------------------------------------
@@ -422,15 +258,6 @@ bool DeRegisterPosition(int m_Session, int m_MagicNumber)
         {
          PositionSummary[m_Session].currentSize-=PositionInfo[m_Session][i].openVolume;
          PositionSummary[m_Session].currentNumPositions--;
-         PositionInfo[m_Session][i].openSequence=0;
-         PositionInfo[m_Session][i].positionTrend=NoTrend;
-         PositionInfo[m_Session][i].isOpenNow=false;
-         PositionInfo[m_Session][i].positionID=NoID;
-         PositionInfo[m_Session][i].pMagicNumber=0;
-         PositionInfo[m_Session][i].openBar=0;
-         PositionInfo[m_Session][i].openVolume=0.;
-         PositionInfo[m_Session][i].openPrice=0.;
-         PositionInfo[m_Session][i].openWmaS=0.;
 
          return(true);
         }    

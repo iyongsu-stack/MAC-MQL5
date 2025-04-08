@@ -7,11 +7,11 @@
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 
-#define IND1 "BSP105V7\\NLR"
-#define IND2 "BSP105V7\\LRAVGSTD"
-#define IND3 "BSP105V7\\BSPWMA"
-#define IND4 "BSP105V7\\BSPBSP2"
-#define IND5 "BSP105V7\\BSPNLR"
+#define IND1 "BSP105V8\\NLR"
+#define IND2 "BSP105V8\\LRAVGSTD"
+#define IND3 "BSP105V8\\BSPWMA"
+#define IND4 "BSP105V8\\BSPBSP2"
+#define IND5 "BSP105V8\\BSPNLR"
 
 #define TotalSession 3
 #define MaxPosition 200
@@ -45,15 +45,6 @@ enum trend
    DownTrend, 
    NoTrend,       
 };
-
-/*
-struct open_Ready
-{
-   bool   LASMReady;
-   int    LASMBar;
-   bool   TrendReady;
-};
-*/
 
 struct open_Ready
 {
@@ -196,12 +187,6 @@ struct position_Sum
    double             lastWmaS;
 };
 
-enum bSP_Value
-{
-   STD,
-   Wma,
-}; 
-
 enum EMyCapitalCalc 
 {
    FREEMARGIN = 2,
@@ -213,38 +198,31 @@ enum EMyCapitalCalc
 input group               "EA Parameter"
 input int                 BaseMagicNumber      = 200000;       // Magic Number
 
-input group               "Lot Size Constance"
-input EMyCapitalCalc      iRisk_AvailableCapital = BALANCE;  // Capital calculation mechanism
-input double              iRisk_FractionOfCapital = 0.001;    // Risk fraction of the capital ,ex: 0.01 = 1%
-input double              MinLotSizeMulti         = 0.1;     //When pyramiding least size multiplier
+input group               "Lot Size Constant"
+input EMyCapitalCalc      iRisk_AvailableCapital = BALANCE;  // iRisk_AvailableCapital Capital calculation mechanism
+input double              iRisk_FractionOfCapital = 0.01;    // iRisk_FractionOfCapital Risk fraction of the capital ,ex: 0.01 = 1%
+input double              t_PydStartSizeMulti=1.; // t_PydStartSizeMulti Con Mode 시작할때, 포지션 사이즈를 결정해주는 값 
+input double              t_NonPyramidMulti=1.;       // t_NonPyramidMulti 정상 PM에서 랏사이즈 결정 변수 
+input double              t_ConeDecMulti=0.7;    //t_ConeDecMulti Con Mod 시작이후, 포지션 사이즈를 줄이기 위한 곱하기 값
+input double              MinLotSizeMulti         = 0.1;     //MinLotSizeMulti When pyramiding least size multiplier
 input string              iCommon_CurrencyPairAppendix = "";              // Currency Pair Appendix
 
 input group               "Stop Loss"
-input bool                SLStart             = true;
-input double              SLBSPSTDMulti       = 3.0;
-input bool                VirtualSL           = true;       /*VirtualSLTP*/     // Stop Loss, Take Profit setting.
-input double              SLPercent             = 0.02;           /*StopLoss*/            // Stop Loss in percent
+input bool                SLStart             = true;   //SLStart
+input double              SLBSPSTDMulti       = 3.0;    //SLBSPSTDMult StopLoss가 시작되는 BSP STD 곱하기 값 
 
 input group               "Pyramid Constants"
-input double              t_PyramidThMulti=3.;
-input double              t_PyramidIncMulti=1.;
-input double              t_PydStartSizeMulti=1.;
-input double              t_ConeDecMulti=0.7;
-input bSP_Value           ThBSP=STD;
-input bSP_Value           IncBSP=STD;
+input double              t_PyramidThMulti=3.;  //t_PyramidThMulti Con Mode가 되기위한 STD Multiplier 값 
+input double              t_PyramidIncMulti=1.;  // t_PyramidIncMulti Con Mode 변환뒤 다음 포지션을 오픈하기 위한 증가값 
+input double              DLRCConMulti=2.0;     // DLRCConMulti DLRCCon 모드가 되기위한 STD 멀티플라이어
 
 input group               "Main Program Constants"
-input int                 FindMinMaxShift = 40;
-input int                 EndBars=60;
-input int                 PMBars=20; 
-input int                 ReadyBars=20;
-input double              DLRCConMulti=2.0;
-input BandState           BuyLRELASLBand=BandP0;
-input BandState           SellLRELASLBand=BandM0;
+input int                 FindMinMaxShiftLR = 20;    // FindMinMaxShiftLR LongReverse 모드에서 최대, 최소 wma 값을 창기위한 bar 수 
+input int                 FindMinMaxShiftETC = 10;   // FindMinMaxShiftETC LongCounter, DLR 모드에서 최대, 최소 wma 값을 찿기위한 bar 수 
+input int                 PMBars=40;          // PMBars 포지션 모드가 변화가 일어날 수 있는 최소 bar 수 
+input int                 ReadyBars=40;     // ReadyBars BandReady가 true로 변한뒤 TrendReady가 true로 되기위한 최대 bar 수 
 input BandState           BuyLCLASLBand=BandM0;
 input BandState           SellLCLASLBand=BandP0;
-input BandState           BuyStiffEndBand=BandP2;
-input BandState           SellStiffEndBand=BandM2;
 
 input group               "LRAVGSTDM"
 input int                 LwmaPeriodM    = 25;          // WmaPeriodM

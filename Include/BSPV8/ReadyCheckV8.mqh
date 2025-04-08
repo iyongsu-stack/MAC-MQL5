@@ -142,6 +142,7 @@ void PositionModeCheck(int m_Session )
 //------------------------------------------------------------------------
 void PositionModeSet(int m_Session, position_Mode m_PositionMode)
 {
+   BeforePM2[m_Session] = BeforePM[m_Session];
    BeforePM[m_Session] = CurPM[m_Session];
    CurPM[m_Session] = m_PositionMode;
             

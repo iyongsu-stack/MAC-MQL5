@@ -19,6 +19,8 @@ bool Initialize(void)
                                                         MultiFactorL1M, MultiFactorL2M, MultiFactorL3M,  MaxBSPMultM );
    LASHandleL        = iCustom(_Symbol,_Period, IND2, LwmaPeriodL, AvgPeriodL, StdPeriodLL, StdPeriodSL,
                                                         MultiFactorL1L, MultiFactorL2L, MultiFactorL3L, MaxBSPMultL);
+   LASHandleT        = iCustom(_Symbol,_Period, IND2, LwmaPeriodT, AvgPeriodT, StdPeriodLT, StdPeriodST,
+                                                        MultiFactorL1T, MultiFactorL2T, MultiFactorL3T, MaxBSPMultT);
    WmaHandleS        = iCustom(_Symbol,_Period, IND3, WmaPeriodS); 
    BSPNlrWmaHandleS  = iCustom(_Symbol,_Period, IND5, BSPNlrPeriodS, BSPWmaPeriodS);
    BSPNlrWmaHandleL  = iCustom(_Symbol,_Period, IND5, BSPNlrPeriodL, BSPWmaPeriodL);   
@@ -28,9 +30,11 @@ bool Initialize(void)
                                                         BSPMultiFactorL1, BSPMultiFactorL2, BSPMultiFactorL3, BSPCutOff);  
 
 
-   if( LASHandleM       == INVALID_HANDLE || LASHandleL       == INVALID_HANDLE || WmaHandleS  == INVALID_HANDLE ||
-       BSPNlrWmaHandleS == INVALID_HANDLE || BSPNlrWmaHandleL == INVALID_HANDLE || NLRLHandleL == INVALID_HANDLE || 
-       WmaHandleL  == INVALID_HANDLE      || BSPHandle   == INVALID_HANDLE )
+   if( LASHandleM       == INVALID_HANDLE || LASHandleL       == INVALID_HANDLE || 
+       LASHandleT       == INVALID_HANDLE || WmaHandleS       == INVALID_HANDLE ||
+       BSPNlrWmaHandleS == INVALID_HANDLE || BSPNlrWmaHandleL == INVALID_HANDLE || 
+       NLRLHandleL      == INVALID_HANDLE || WmaHandleL       == INVALID_HANDLE || 
+       BSPHandle        == INVALID_HANDLE )
      {
       Alert("Error when loading the indicator, please try again");
       return(false);
@@ -63,6 +67,9 @@ bool Initialize(void)
    ArraySetAsSeries(LASLM2Band, true);
    ArraySetAsSeries(LASLM3Band, true);
 
+   ArraySetAsSeries(LASTBuffer, true);
+   ArraySetAsSeries(LASTColorBuffer, true);
+
    ArraySetAsSeries(WmaSBuffer, true);
    ArraySetAsSeries(WmaSColorBuffer, true);
    ArraySetAsSeries(WmaLBuffer, true);
@@ -82,6 +89,7 @@ bool Initialize(void)
 */
 
    ArrayResize(PositionSummary, TotalSession);
+   ArrayResize(BeforePM2, TotalSession);
    ArrayResize(BeforePM, TotalSession);
    ArrayResize(CurPM, TotalSession);
    ArrayResize(BasePositionMN, TotalSession);
@@ -90,11 +98,6 @@ bool Initialize(void)
    ArrayResize(OpenReady, TotalSession);  
    
    if(!MagicNumberInit()) return(false);
-      
-   SessionMan.LastSession=0;
-   SessionMan.CurSession=0;
-   SessionMan.CanGoBand=true;
-   SessionMan.CanGoTrend=true;
    
    PyramidGloConst.pyramidThMulti=t_PyramidThMulti;
    PyramidGloConst.pyramidIncMulti=t_PyramidIncMulti;
@@ -105,11 +108,11 @@ bool Initialize(void)
      {
       InitPositionSum(m_Session);            
       ReOCReset(m_Session);
-      BeforePM[m_Session]=NoMode;
-      CurPM[m_Session]=NoMode;
+      InitPM(m_Session);
       OpenReadyReset(m_Session);
      }
-     
+
+   InitSessionMan();
 
    return(true);
 }
@@ -180,4 +183,20 @@ void OpenReadyReset(int m_Session)
    OpenReady[m_Session].SellLASMReady = false;
    OpenReady[m_Session].SellLASMBar=0;
    OpenReady[m_Session].SellTrendReady = false;
+}
+
+void InitPM(int m_Session)
+{
+   CurPM[m_Session]=NoMode;
+   BeforePM[m_Session]=NoMode;
+   BeforePM2[m_Session]=NoMode;
+}
+
+
+void InitSessionMan(void)
+{
+   SessionMan.LastSession=0;
+   SessionMan.CurSession=0;
+   SessionMan.CanGoBand=true;
+   SessionMan.CanGoTrend=true;
 }

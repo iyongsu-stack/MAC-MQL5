@@ -41,7 +41,10 @@ bool Indicators()
       CopyBuffer(LASHandleL,     4,  Shift,  1, LASLM2Band)                    == -1   ||
       CopyBuffer(LASHandleL,     5,  Shift,  1, LASLM3Band)                    == -1   ||
 
-      CopyBuffer(WmaHandleS,     0,  Shift, FindMinMaxSize, WmaSBuffer)       == -1   ||
+      CopyBuffer(LASHandleT,     6,  Shift,  1, LASTBuffer)                    == -1   ||
+      CopyBuffer(LASHandleT,     7,  Shift,  1, LASTColorBuffer)               == -1   ||
+
+      CopyBuffer(WmaHandleS,     0,  Shift, FindMinMaxSize, WmaSBuffer)       == -1    ||
       CopyBuffer(WmaHandleS,     1,  Shift,  1, WmaSColorBuffer)               == -1   ||
 
       CopyBuffer(WmaHandleL,     0,  Shift,  1, WmaLBuffer)                    == -1   ||
@@ -60,6 +63,7 @@ bool Indicators()
    NLRLValue       = NLRLBuffer[0];
    LASMValue       = LASMBuffer[0];
    LASLValue       = LASLBuffer[0];
+   LASTValue       = LASTBuffer[0];
    WmaSValue       = WmaSBuffer[0];
    WmaLValue       = WmaLBuffer[0];
    BSPNlrWmaValueS = BSPNlrWmaBufferS[0];
@@ -75,6 +79,8 @@ bool Indicators()
                                          else LASMTrend = UpTrend;
    LASLTrend1       = LASLTrend;        if( (int)NormalizeDouble(LASLColorBuffer[0], 0) == 1) LASLTrend = DownTrend;  
                                          else LASLTrend = UpTrend;
+   LASTTrend1       = LASTTrend;        if( (int)NormalizeDouble(LASTColorBuffer[0], 0) == 1) LASTTrend = DownTrend;  
+                                         else LASTTrend = UpTrend;
    WmaSTrend1       = WmaSTrend;        if( (int)NormalizeDouble(WmaSColorBuffer[0], 0) == 1) WmaSTrend = DownTrend;  
                                          else WmaSTrend = UpTrend;
    WmaLTrend1       = WmaLTrend;        if( (int)NormalizeDouble(WmaLColorBuffer[0], 0) == 1) WmaLTrend = DownTrend;  
@@ -84,12 +90,6 @@ bool Indicators()
    BSPNlrWmaTrendL1 = BSPNlrWmaTrendL;  if( (int)NormalizeDouble(BSPNlrWmaColorBufferL[0], 0) == 1) BSPNlrWmaTrendL = DownTrend;
                                          else BSPNlrWmaTrendL = UpTrend;                                        
 
-   if( (LASMTrend == LASMTrend1) || (LASMTrend == NoTrend) ) LASMTrendN++;    else LASMTrendN = 1;
-   if( (LASLTrend == LASLTrend1) || (LASLTrend == NoTrend) ) LASLTrendN++;    else LASLTrendN = 1;
-   
-   if(TrendL1!=NoTrend) TrendL2=TrendL1; 
-   TrendL1 = TrendL;
-
    if( (BSPNlrWmaTrendL == DownTrend) ) TrendL = DownTrend;
    else if ( (BSPNlrWmaTrendL == UpTrend) ) TrendL = UpTrend;
    else TrendL = NoTrend;
@@ -97,8 +97,6 @@ bool Indicators()
    if( (WmaLTrend == DownTrend) && (BSPNlrWmaTrendL == DownTrend) && (NLRLTrend == DownTrend) ) TrendLL = DownTrend;
    else if ( (WmaLTrend == UpTrend) && (BSPNlrWmaTrendL == UpTrend) && (NLRLTrend == UpTrend)) TrendLL = UpTrend;
    else TrendLL = NoTrend;
-
-   if( (TrendL==TrendL1)||(TrendL==NoTrend)||((TrendL1==NoTrend)&&(TrendL==TrendL2)) ) TrendLN++;    else TrendLN = 1;   
    
    if      (LASMValue > LASMP3Band[0])         LASMBand = BandP3;
    else if (LASMValue > LASMP2Band[0])         LASMBand = BandP2;
@@ -130,6 +128,14 @@ bool Indicators()
    return(true);  
 
 }
+
+void TrendCase(void)
+{
+
+
+   
+}
+
 
 
 //-----------------------------------------------------------------------------------------------------------++++
