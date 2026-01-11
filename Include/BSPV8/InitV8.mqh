@@ -22,8 +22,8 @@ bool Initialize(void)
    LASHandleT        = iCustom(_Symbol,_Period, IND2, LwmaPeriodT, AvgPeriodT, StdPeriodLT, StdPeriodST,
                                                         MultiFactorL1T, MultiFactorL2T, MultiFactorL3T, MaxBSPMultT);
    WmaHandleS        = iCustom(_Symbol,_Period, IND3, WmaPeriodS); 
-   BSPNlrWmaHandleS  = iCustom(_Symbol,_Period, IND5, BSPNlrPeriodS, BSPWmaPeriodS);
-   BSPNlrWmaHandleL  = iCustom(_Symbol,_Period, IND5, BSPNlrPeriodL, BSPWmaPeriodL);   
+   BSPNlrWmaHandleS  = iCustom(_Symbol,_Period, IND5, BSPWmaPeriodS, BSPNlrPeriodS);
+   BSPNlrWmaHandleL  = iCustom(_Symbol,_Period, IND5, BSPWmaPeriodL, BSPNlrPeriodL);   
    NLRLHandleL       = iCustom(_Symbol,_Period, IND1, NLRLPeriod );
    WmaHandleL        = iCustom(_Symbol,_Period, IND3, WmaPeriodL); 
    BSPHandle         = iCustom(_Symbol,_Period, IND4, WmaBSP, BSPStdPeriodL,  
@@ -101,7 +101,6 @@ bool Initialize(void)
    
    PyramidGloConst.pyramidThMulti=t_PyramidThMulti;
    PyramidGloConst.pyramidIncMulti=t_PyramidIncMulti;
-   PyramidGloConst.pydStartSizeMulti=t_PydStartSizeMulti;
    PyramidGloConst.coneDecMulti=t_ConeDecMulti;
     
    for(int m_Session=0; m_Session<TotalSession;m_Session++)
@@ -123,7 +122,6 @@ void InitPositionSum(int m_Session)
 {
    PositionSummary[m_Session].totalNumPositions=0;
    PositionSummary[m_Session].currentNumPositions=0;
-   PositionSummary[m_Session].startingBar=0;
    PositionSummary[m_Session].firstPositionTrend=NoTrend;
    PositionSummary[m_Session].lastPositionTrend=NoTrend;
    PositionSummary[m_Session].totalSize=0;
@@ -131,7 +129,7 @@ void InitPositionSum(int m_Session)
    PositionSummary[m_Session].pyramidStarted=false;
    PositionSummary[m_Session].pyramidTrend=NoTrend;
    PositionSummary[m_Session].pyramidPID=NoID;
-   PositionSummary[m_Session].lastStackNum=0;
+   PositionSummary[m_Session].lastSizeMulti=0.;
    PositionSummary[m_Session].lastWmaS=0.;
 } 
 
@@ -141,7 +139,7 @@ void InitPyramidData(int m_Session)
    PositionSummary[m_Session].pyramidStarted=false;
    PositionSummary[m_Session].pyramidTrend=NoTrend;
    PositionSummary[m_Session].pyramidPID=NoID;
-   PositionSummary[m_Session].lastStackNum=0;
+   PositionSummary[m_Session].lastSizeMulti=0.;
    PositionSummary[m_Session].lastWmaS=0.;
 } 
 
@@ -153,6 +151,7 @@ void ReOCReset(int m_Session)
    ReOC[m_Session].MinBar=0;   
    ReOC[m_Session].MinBSP=0.;
    ReOC[m_Session].MaxMinBar=0;
+   ReOC[m_Session].MaxMinWmaS=0.;
    ReOC[m_Session].MRBar=0;
    ReOC[m_Session].LRBar=0;
    ReOC[m_Session].LRConBar=0;
@@ -171,6 +170,7 @@ void InitMinMax(int m_Session)
    ReOC[m_Session].MinBar=0;   
    ReOC[m_Session].MinBSP=0.;
    ReOC[m_Session].MaxMinBar=0;
+   ReOC[m_Session].MaxMinWmaS=0.;
 }
 
 //-------------------------------------------------------------------+

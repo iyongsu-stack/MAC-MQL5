@@ -314,6 +314,7 @@ bool CreateHandles()
          return(false);
         }
       //---
+      Sleep(50);
       if(!ma[i].Create(symbol,PERIOD_CURRENT,ma_period_,0,MODE_EMA,PRICE_CLOSE))
         {
          //--- if the handle is not created
@@ -389,7 +390,7 @@ int OnCalculate(const int rates_total,
       if(ma[i].BarsCalculated()<0)
         {
          Print(__FUNCTION__+": ",symbols[i]," not ready.");
-         CheckLoadHistory(symbols[i],PERIOD_CURRENT,1000);
+         CheckLoadHistory(symbols[i],PERIOD_CURRENT,5000);
          return(0);
         }
       //--- update the ma indicator data

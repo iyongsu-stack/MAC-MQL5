@@ -35,6 +35,15 @@ double ToPoint;
 void OnInit()
   {
 
+   ArrayInitialize(SellPressure,0.0);
+   ArrayInitialize(BuyPressure,0.0);
+   ArrayInitialize(SumSellPressure,0.0);
+   ArrayInitialize(SumBuyPressure,0.0);
+   ArrayInitialize(SumDiffPressure,0.0);
+   ArrayInitialize(SumDiffPressureC,0); 
+   ArrayInitialize(avg1SellPressure,0.0);
+   ArrayInitialize(avg1BuyPressure,0.0);
+
    SetIndexBuffer(0,SumDiffPressure,INDICATOR_DATA);
    SetIndexBuffer(1,SumDiffPressureC,INDICATOR_COLOR_INDEX);   
    SetIndexBuffer(2,SumBuyPressure,INDICATOR_CALCULATIONS);

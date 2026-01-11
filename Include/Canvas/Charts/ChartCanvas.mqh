@@ -1,10 +1,11 @@
 //+------------------------------------------------------------------+
 //|                                                  ChartCanvas.mqh |
-//|                             Copyright 2000-2024, MetaQuotes Ltd. |
+//|                             Copyright 2000-2025, MetaQuotes Ltd. |
 //|                                             https://www.mql5.com |
 //+------------------------------------------------------------------+
 #include "..\Canvas.mqh"
 #include <Arrays\ArrayInt.mqh>
+#include <Arrays\ArrayUInt.mqh>
 #include <Arrays\ArrayDouble.mqh>
 #include <Arrays\ArrayString.mqh>
 //--- enumerations
@@ -71,8 +72,8 @@ protected:
    //--- data
    int               m_data_offset;
    uint              m_data_total;
-   CArray           *m_data;
-   CArrayInt         m_colors;
+   CArray*           m_data;
+   CArrayUInt        m_colors;
    CArrayString      m_descriptors;
    //---
    CArrayInt         m_index;
@@ -253,7 +254,7 @@ void CChartCanvas::MaxData(const uint value)
   {
 //--- check
    if((value==0) || (m_data_total==value))
-    return;
+      return;
 //--- save
    m_max_data=value;
    if(m_data_total>m_max_data)
@@ -493,9 +494,6 @@ void CChartCanvas::VScaleMax(const double value)
 //+------------------------------------------------------------------+
 void CChartCanvas::NumGrid(const uint value)
   {
-//--- check
-   if(value==0)
-    return;
 //--- save
    m_num_grid=value;
 //--- redraw
@@ -508,8 +506,6 @@ void CChartCanvas::NumGrid(const uint value)
 void CChartCanvas::VScaleParams(const double max,const double min,const uint grid)
   {
 //--- check
-   if(grid==0)
-      return;
    if(max<=min)
       return;
 //--- save
@@ -561,7 +557,7 @@ bool CChartCanvas::ColorUpdate(const uint pos,const uint clr)
 void CChartCanvas::ValuesCheck(void)
   {
    string text;
-   uint   w,h;
+   int    w,h;
 //--- clear
    m_max_value_width=0;
    m_sum            =0;
@@ -593,14 +589,14 @@ void CChartCanvas::ValuesCheck(void)
             m_index.Add(i);
             text=DoubleToString(value,2);
             TextSize(text,w,h);
-            if(m_max_value_width<w)
-               m_max_value_width=w;
+            if(m_max_value_width<(uint)w)
+               m_max_value_width=(uint)w;
            }
         }
       text=DoubleToString(m_others,2);
       TextSize(text,w,h);
-      if(m_max_value_width<w)
-         m_max_value_width=w;
+      if(m_max_value_width<(uint)w)
+         m_max_value_width=(uint)w;
       m_index_size=m_index.Total();
      }
    else
@@ -692,9 +688,10 @@ void CChartCanvas::DrawLegend(void)
         }
      }
    if(max_len==0)
-    return;
-   TextSize(" - "+text,m_max_descr_width,h);
-   w=(int)m_max_descr_width+3*h;
+      return;
+   TextSize(" - "+text,w,h);
+   m_max_descr_width=(uint)w;
+   w=w+3*h;
 //--- check flag
    if(!IS_SHOW_LEGEND)
       return;
@@ -810,9 +807,9 @@ int CChartCanvas::DrawLegendHorizontal(const int w,const int h)
          FillRectangle(x,y,x+h,y+h,(uint)m_colors[i]);
          TextOut(x+h,y," - "+m_descriptors[i],m_color_text);
         }
-      }
-    else
-      {
+     }
+   else
+     {
       for(i=0;i<(int)m_index_size;i++,x+=dx)
         {
          int index=m_index[i];
@@ -831,7 +828,7 @@ int CChartCanvas::DrawLegendHorizontal(const int w,const int h)
         }
       FillRectangle(x,y,x+h,y+h,COLOR2RGB(clrBlack));
       TextOut(x+h,y," - Others",m_color_text);
-      }
+     }
 //--- height
    return(dy*(rows+1));
   }
@@ -846,9 +843,12 @@ void CChartCanvas::CalcScales(void)
    m_y_max=m_data_area.top+DrawScaleTop(false);
    m_y_min=m_data_area.bottom-DrawScaleBottom(false);
 //--- additional
-   m_dy_grid=(int)((m_y_min-m_y_max)/m_num_grid);
-   m_y_max+=(int)(((m_y_min-m_y_max)-m_dy_grid*m_num_grid)/2);
-   m_y_min=(int)(m_y_max+m_dy_grid*m_num_grid);
+   if(m_num_grid > 0)
+     {
+      m_dy_grid=(int)((m_y_min-m_y_max)/m_num_grid);
+      m_y_max+=(int)(((m_y_min-m_y_max)-m_dy_grid*m_num_grid)/2);
+      m_y_min=(int)(m_y_max+m_dy_grid*m_num_grid);
+     }
 //--- normalize
    if(m_v_scale_min>=0.0)
       m_y_0=m_y_min;
@@ -860,12 +860,12 @@ void CChartCanvas::CalcScales(void)
          m_y_0=(int)(m_y_max+(m_y_min-m_y_max)*m_v_scale_max/(m_v_scale_max-m_v_scale_min));
      }
 //--- scale
-   m_scale_y=(m_v_scale_max!=m_v_scale_min) ? (m_y_min-m_y_max)/(m_v_scale_max-m_v_scale_min) : 1;
+   m_scale_y=(m_v_scale_max!=m_v_scale_min) ? (m_y_max-m_y_min)/(m_v_scale_max-m_v_scale_min) : 1;
 //--- labels on scale
    if(ArraySize(m_scale_text)!=m_num_grid+1 && ArrayResize(m_scale_text,m_num_grid+1)==-1)
       return;
    double val=m_v_scale_min;
-   double dval=(m_v_scale_max-m_v_scale_min)/m_num_grid;
+   double dval=(m_num_grid==0) ? 0 : (m_v_scale_max-m_v_scale_min)/m_num_grid;
    for(uint i=0;i<=m_num_grid;i++,val+=dval)
       m_scale_text[i]=DoubleToString(val,m_scale_digits);
   }
@@ -1016,12 +1016,17 @@ void CChartCanvas::DrawGrid(void)
 //--- check flag
    if(!IS_SHOW_GRID)
       return;
+//--- check number grid
+   if(m_num_grid == 0)
+      return;
 //--- variables
    int x1=m_data_area.left;
    int x2=m_data_area.right;
    int y =m_y_min;
 //--- draw
    uint j=m_num_grid-((IS_SHOW_SCALE_TOP) ? 1 : 0);
+   if(j==0)
+      return;
    if(IS_SHOW_SCALE_BOTTOM)
      {
       y-=m_dy_grid;

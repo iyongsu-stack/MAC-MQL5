@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
 //|                                                 DateDropList.mqh |
-//|                             Copyright 2000-2024, MetaQuotes Ltd. |
+//|                             Copyright 2000-2025, MetaQuotes Ltd. |
 //|                                             https://www.mql5.com |
 //+------------------------------------------------------------------+
 #include "WndContainer.mqh"
@@ -51,7 +51,7 @@ public:
    //--- data
    datetime          Value(void)                    { return(StructToTime(m_value)); }
    void              Value(datetime value)          { m_value.Date(value);           }
-   void              Value(MqlDateTime& value)      { m_value=value;                 }
+   void              Value(MqlDateTime& value)      { (MqlDateTime&)m_value=value;   }
    //--- state
    virtual bool      Show(void);
 

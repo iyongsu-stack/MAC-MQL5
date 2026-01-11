@@ -1,9 +1,9 @@
 //+------------------------------------------------------------------+
 //|                                                       DXMesh.mqh |
-//|                             Copyright 2000-2024, MetaQuotes Ltd. |
+//|                             Copyright 2000-2025, MetaQuotes Ltd. |
 //|                                             https://www.mql5.com |
 //+------------------------------------------------------------------+
-#property copyright "Copyright 2000-2024, MetaQuotes Ltd."
+#property copyright "Copyright 2000-2025, MetaQuotes Ltd."
 #property link      "https://www.mql5.com"
 #include "DXObject.mqh"
 #include "DXDispatcher.mqh"
@@ -117,10 +117,9 @@ public:
       if(!DXLoadObjModel(obj_path,vertices,indices,scale))
          return(false);
       //--- set white vertices color
-      DXColor white=DXColor(1.0f,1.0f,1.0f,1.0f);
       int count=ArraySize(vertices);
       for(int i=0; i<count; i++)
-         vertices[i].vcolor=white;
+         vertices[i].vcolor=DXColor(1.0f,1.0f,1.0f,1.0f);
       //--- inverse winding
       if(inverse_winding)
          DXInverseWinding(vertices,indices);

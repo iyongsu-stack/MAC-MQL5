@@ -6,139 +6,6 @@
 #property copyright "Yong-su, Kim"
 #property link      "https://www.mql5.com"
 
-//#include <BSPV7/ExternVariables.mqh>
-//#include <BSPV7/SessionManV7.mqh>
-//#include <BSPV7/OpenCloseV7.mqh>
-//#include <BSPV7/PyramidV7.mqh>
-
-
-
-//------------------------------------------------------------------------
-void PositionModeCheck(int m_Session )
-{
-
-   if(CurPM[m_Session]==NoMode) return;
-
-   int m_BarCount=0;
-   
-   if(CurPM[m_Session]!=End) m_BarCount=CurBar-ReOC[m_Session].MaxMinBar;  
-
-
-   if( PositionSummary[m_Session].firstPositionTrend == DownTrend )
-     {
-           
-      //-----------------------------------------------------------------LongReverseCon, Pyramiding Start
-      if( (CurPM[m_Session]==LongReverse) &&
-          (TrendLL==DownTrend) && 
-          (WmaSValue<=(PositionSummary[m_Session].lastWmaS-ThBSPValue)) )
-           PositionModeSet(m_Session, LongReverseCon);
-      //-----------------------------------------------------------------LongReverse, LongReverseCon End    
-      if( ( (CurPM[m_Session]==LongReverse) || (CurPM[m_Session]==LongReverseCon) ) &&
-          (TrendLL==UpTrend) && 
-          ( (m_BarCount>PMBars)||(LASLBand<SellLCLASLBand) ) )
-           PositionModeSet(m_Session, End);
-      //-----------------------------------------------------------------LongCounter Start    
-      if( ( (CurPM[m_Session]==LongReverse) || (CurPM[m_Session]==LongReverseCon) ) &&
-          (TrendLL==UpTrend) && 
-          (m_BarCount<=PMBars) && 
-          (LASLBand>=SellLCLASLBand) )
-           PositionModeSet(m_Session, LongCounter);
-      //-----------------------------------------------------------------LongCounterCon, Pyramiding Start
-      if( (CurPM[m_Session]==LongCounter) &&
-          (TrendLL==UpTrend) &&
-          (WmaSValue>=(PositionSummary[m_Session].lastWmaS+ThBSPValue)) )
-           PositionModeSet(m_Session, LongCounterCon);
-      //-----------------------------------------------------------------LongCounter, LongCounterCon End
-      if( ( (CurPM[m_Session]==LongCounter) || (CurPM[m_Session]==LongCounterCon) ) &&
-          (TrendLL==DownTrend) &&
-          (m_BarCount>PMBars) )
-           PositionModeSet(m_Session, End);
-      //-----------------------------------------------------------------DLR Start
-      if( (CurPM[m_Session]==LongCounter || CurPM[m_Session]==LongCounterCon) &&
-          (TrendLL==DownTrend) && 
-          (m_BarCount<=PMBars) ) 
-           PositionModeSet(m_Session, DoubleLongReverse);  
-      //----------------------------------------------------------------- DLRCon, Pyramiding Start
-      if( CurPM[m_Session]==DoubleLongReverse &&
-          (TrendLL==DownTrend) && 
-          (WmaSValue<=(PositionSummary[m_Session].lastWmaS-ThBSPValue) ) )
-           PositionModeSet(m_Session, DLRCon);
-      //----------------------------------------------------------------- DLRCCon, Pyramiding Start
-      if( CurPM[m_Session]==DoubleLongReverse &&
-          (TrendLL==UpTrend) && 
-          (WmaSValue>=(PositionSummary[m_Session].lastWmaS+DLRCConThValue) )  )
-           PositionModeSet(m_Session, DLRCCon);
-      //----------------------------------------------------------------- DLRCon End
-      if(  CurPM[m_Session]==DLRCon && 
-          (TrendLL==UpTrend) &&
-          (LASMTrend==UpTrend) )
-           PositionModeSet(m_Session, End);
-      //----------------------------------------------------------------- DLRCCon End     
-      if(  CurPM[m_Session]==DLRCCon &&      
-          (TrendLL==DownTrend) &&
-          (LASMTrend==DownTrend) )
-           PositionModeSet(m_Session, End);      
-     }  
-           
-   if( PositionSummary[m_Session].firstPositionTrend== UpTrend )
-     {       
-            
-      //-----------------------------------------------------------------LongReverseCon, Pyramiding Start
-      if( (CurPM[m_Session]==LongReverse) &&
-          (TrendLL==UpTrend) && 
-          (WmaSValue>=(PositionSummary[m_Session].lastWmaS+ThBSPValue)) )
-           PositionModeSet(m_Session, LongReverseCon);
-      //-----------------------------------------------------------------LongReverse, LongReverseCon End    
-      if( ( (CurPM[m_Session]==LongReverse) || (CurPM[m_Session]==LongReverseCon) ) &&
-          (TrendLL==DownTrend) &&
-          ( (m_BarCount>PMBars)||(LASLBand>BuyLCLASLBand) ) )
-           PositionModeSet(m_Session, End);
-      //-----------------------------------------------------------------LongCounter Start    
-      if( ( (CurPM[m_Session]==LongReverse) || (CurPM[m_Session]==LongReverseCon) ) &&
-          (TrendLL==DownTrend) && 
-          (m_BarCount<=PMBars) && 
-          (LASLBand<=BuyLCLASLBand) )
-           PositionModeSet(m_Session, LongCounter);
-      //-----------------------------------------------------------------LongCounterCon, Pyramiding Start
-      if( (CurPM[m_Session]==LongCounter) &&
-          (TrendLL==DownTrend) &&
-          (WmaSValue<=(PositionSummary[m_Session].lastWmaS-ThBSPValue)) )
-           PositionModeSet(m_Session, LongCounterCon);
-      //-----------------------------------------------------------------LongCounter, LongCounterCon End
-      if( ( (CurPM[m_Session]==LongCounter) || (CurPM[m_Session]==LongCounterCon) ) &&
-          (TrendLL==UpTrend) &&
-          (m_BarCount>PMBars) )
-           PositionModeSet(m_Session, End);
-      //-----------------------------------------------------------------DLR Start
-      if( (CurPM[m_Session]==LongCounter || CurPM[m_Session]==LongCounterCon) &&
-          (TrendLL==UpTrend) && 
-          (m_BarCount<=PMBars) ) 
-           PositionModeSet(m_Session, DoubleLongReverse);  
-      //----------------------------------------------------------------- DLRCon, Pyramiding Start
-      if( CurPM[m_Session]==DoubleLongReverse &&
-          (TrendLL==UpTrend) && 
-          (WmaSValue>=(PositionSummary[m_Session].lastWmaS+ThBSPValue) ) )
-           PositionModeSet(m_Session, DLRCon);
-      //----------------------------------------------------------------- DLRCCon, Pyramiding Start
-      if( CurPM[m_Session]==DoubleLongReverse &&
-          (TrendLL==DownTrend) && 
-          (WmaSValue<=(PositionSummary[m_Session].lastWmaS-DLRCConThValue) )  )
-           PositionModeSet(m_Session, DLRCCon);
-      //----------------------------------------------------------------- DLRCon End
-      if(  CurPM[m_Session]==DLRCon && 
-          (TrendLL==DownTrend) &&
-          (LASMTrend==DownTrend) )
-           PositionModeSet(m_Session, End);
-      //----------------------------------------------------------------- DLRCCon End     
-      if(  CurPM[m_Session]==DLRCCon &&      
-          (TrendLL==UpTrend) &&
-          (LASMTrend==UpTrend) )
-           PositionModeSet(m_Session, End);      
-     }  
-
-}
-
-
 //------------------------------------------------------------------------
 void PositionModeSet(int m_Session, position_Mode m_PositionMode)
 {
@@ -256,7 +123,7 @@ bool OpenReadyCheck(int m_Session)
 
    if(CurPM[m_Session]!=NoMode || SessionMan.CurSession!=m_Session) return(false);
 
-//  Sell Open Ready Check
+   //  Sell Open Ready Check
    if( SessionMan.CanGoBand && !OpenReady[m_Session].SellLASMReady && (LASMBand>=BandP2) ) 
      {
       OpenReady[m_Session].SellLASMReady = true;  
@@ -266,8 +133,6 @@ bool OpenReadyCheck(int m_Session)
      }
    if( OpenReady[m_Session].SellLASMReady && ( (CurBar-OpenReady[m_Session].SellLASMBar)>ReadyBars ) )
      {
-      SessionMan.CanGoBand=true;
-      SessionMan.CanGoTrend=true;
       OpenReadyReset(m_Session);
       return(false);
      }   
@@ -287,8 +152,6 @@ bool OpenReadyCheck(int m_Session)
      } 
    if( OpenReady[m_Session].BuyLASMReady && ( (CurBar-OpenReady[m_Session].BuyLASMBar)>ReadyBars ) )
      {
-      SessionMan.CanGoBand=true;
-      SessionMan.CanGoTrend=true;
       OpenReadyReset(m_Session);
       return(false);
      } 

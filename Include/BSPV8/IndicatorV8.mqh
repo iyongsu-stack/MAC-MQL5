@@ -71,7 +71,6 @@ bool Indicators()
    BSPValue        = BSPBuffer[0];
    BSPWmaValue     = BSPWmaBuffer[0];
    BSPSTD          = BSP1Band[0];
-   SLBSPValue      = BSPSTD*SLBSPSTDMulti;
    
    NLRLTrend1       = NLRLTrend;        if( (int)NormalizeDouble(NLRLColorBuffer[0], 0) == 1) NLRLTrend = DownTrend;  
                                          else NLRLTrend = UpTrend;
@@ -90,14 +89,8 @@ bool Indicators()
    BSPNlrWmaTrendL1 = BSPNlrWmaTrendL;  if( (int)NormalizeDouble(BSPNlrWmaColorBufferL[0], 0) == 1) BSPNlrWmaTrendL = DownTrend;
                                          else BSPNlrWmaTrendL = UpTrend;                                        
 
-   if( (BSPNlrWmaTrendL == DownTrend) ) TrendL = DownTrend;
-   else if ( (BSPNlrWmaTrendL == UpTrend) ) TrendL = UpTrend;
-   else TrendL = NoTrend;
+   TrendCase();
 
-   if( (WmaLTrend == DownTrend) && (BSPNlrWmaTrendL == DownTrend) && (NLRLTrend == DownTrend) ) TrendLL = DownTrend;
-   else if ( (WmaLTrend == UpTrend) && (BSPNlrWmaTrendL == UpTrend) && (NLRLTrend == UpTrend)) TrendLL = UpTrend;
-   else TrendLL = NoTrend;
-   
    if      (LASMValue > LASMP3Band[0])         LASMBand = BandP3;
    else if (LASMValue > LASMP2Band[0])         LASMBand = BandP2;
    else if (LASMValue > LASMP1Band[0])         LASMBand = BandP1; 
@@ -119,6 +112,8 @@ bool Indicators()
    ThBSPValue=MathAbs(BSPSTD*PyramidGloConst.pyramidThMulti);
    IncBSPValue=MathAbs(BSPSTD*PyramidGloConst.pyramidIncMulti);
    DLRCConThValue=MathAbs(BSPSTD*DLRCConMulti);  
+   SLBSPValue=MathAbs(BSPSTD*SLBSPSTDMulti);
+   TSThValue=MathAbs(BSPSTD*TSBSPSTDMulti);
     
    if( Times(curTime) && !StartTrading )  StartTrading = true;  
    else if( !Times(curTime) && StartTrading )  StartTrading = false;  
@@ -131,9 +126,63 @@ bool Indicators()
 
 void TrendCase(void)
 {
+   trend m_Trend=NoTrend;
 
+   switch(TrendCase)
+   {
+      case TrendCase1:
+         if( (BSPNlrWmaTrendL == DownTrend) && (LASTTrend == DownTrend) ) TrendL = DownTrend;
+         else if ( (BSPNlrWmaTrendL == UpTrend) && (LASTTrend == UpTrend) ) TrendL = UpTrend;
+         else TrendL = NoTrend;
+         
+         if( (WmaLTrend == DownTrend) && (BSPNlrWmaTrendL == DownTrend) && (NLRLTrend == DownTrend) ) 
+            TrendLL = DownTrend;
+         else if ( (WmaLTrend == UpTrend) && (BSPNlrWmaTrendL == UpTrend) && (NLRLTrend == UpTrend)) 
+            TrendLL = UpTrend;
+         else TrendLL = NoTrend;
+         break;
+ 
+      case TrendCase2:
+         if( (WmaLTrend == DownTrend) && (BSPNlrWmaTrendS == DownTrend) && (NLRLTrend == DownTrend) )
+           {
+            TrendL = DownTrend;
+            TrendLL = DownTrend;
+           }
+         else if ( (WmaLTrend == UpTrend) && (BSPNlrWmaTrendS == UpTrend) && (NLRLTrend == UpTrend) )
+           {
+            TrendL = UpTrend;
+            TrendLL = UpTrend;
+           }
+         else 
+           {
+            TrendL = NoTrend;
+            TrendLL = NoTrend;
+           }
+         break;   
 
-   
+      case TrendCase3:
+         if( (NLRLTrend == DownTrend) && (WmaLTrend == DownTrend) )   
+           {
+            TrendL = DownTrend;
+            TrendLL = DownTrend;
+           } 
+         else if ( (NLRLTrend == UpTrend) && (WmaLTrend == UpTrend) )
+           {
+            TrendL = UpTrend;
+            TrendLL = UpTrend;
+           }    
+         else 
+           {
+            TrendL = NoTrend;
+            TrendLL = NoTrend;
+           }
+         break;
+ 
+      default:
+         break;
+   }
+ 
+   return;
 }
 
 
@@ -144,7 +193,6 @@ bool tickIndicators()
    
    if(CopyBuffer(WmaHandleS,    0,  0, 1, WmaSBuffer)       == -1   ||
       CopyBuffer(BSPHandle,     7,  0, 1, BSPBuffer)        == -1   )  return(false);
-
 
    WmaSValue  = WmaSBuffer[0];
    BSPValue   = BSPBuffer[0];

@@ -7,19 +7,13 @@
 #property link      "https://www.mql5.com"
 
 
-//#include <BSPV8/ExternVariables.mqh>
-//#include <BSPV8/CommonV8.mqh>
-//#include <BSPV8/ReadyCheckV8.mqh>
-//#include <BSPV8/MagicNumberV8.mqh>
-//#include <BSPV8/MoneyManageV8.mqh>
-
 //------------------------------------------------------------------------
 void MyOpenPosition(int m_Session)
 {
    if( (OpenCloseCase==OCCase1) || (OpenCloseCase==OCCase2) )
-      MyOpenPositionCase1_2(m_Session);
+      MyOpenPositionCase1_2(m_Session);   //PM 바뀔때마다 오픈   
    else if(OpenCloseCase==OCCase3)
-      MyOpenPositionCase3(m_Session);
+      MyOpenPositionCase3(m_Session);     //Con 모드에서만 오픈
 }
 
 
@@ -27,9 +21,9 @@ void MyOpenPosition(int m_Session)
 void MyClosePosition(int m_Session)
 {
    if( (OpenCloseCase==OCCase1) || (OpenCloseCase==OCCase3) )
-      MyClosePositionCase1_3(m_Session);
+      MyClosePositionCase1_3(m_Session);  //PM 바뀔때마다 클로즈
    else if(OpenCloseCase==OCCase2)
-      MyClosePositionCase2(m_Session);
+      MyClosePositionCase2(m_Session);  //Con 모드시작시 반대 포지션 클로즈 
 }
 
 
@@ -125,18 +119,28 @@ void MyOpenPositionCase1_2(int m_Session)
            } 
         }
       PositionSummary[m_Session].pyramidStarted=true;  
-      m_LotSizeMulti=m_LotSizeMulti*PyramidGloConst.pydStartSizeMulti;
       PositionSummary[m_Session].pyramidPID=m_PositionID;
       PositionSummary[m_Session].pyramidTrend=m_Trend;  
       PositionSummary[m_Session].lastWmaS=WmaSValue;
      }        
-   
-  if(PositionSummary[m_Session].pyramidStarted)
-      m_LotSizeMulti = m_LotSizeMulti*PyramidGloConst.pydStartSizeMulti;
-   
-  if(m_PositionID!=No_Signal)
+
+   if(CurPM[m_Session]==LongReverse)
+      m_LotSizeMulti=m_LotSizeMulti*PM_LR_Multi;
+   else if(CurPM[m_Session]==LongCounter)
+      m_LotSizeMulti=m_LotSizeMulti*PM_LC_Multi;
+   else if(CurPM[m_Session]==DoubleLongReverse)
+      m_LotSizeMulti=m_LotSizeMulti*PM_DLR_Multi;
+   else if(CurPM[m_Session]==LongReverseCon || CurPM[m_Session]==DLRCon)
+      m_LotSizeMulti=m_LotSizeMulti*PM_LRCnDLRC_Multi;
+   else if(CurPM[m_Session]==LongCounterCon || CurPM[m_Session]==DLRCCon)
+      m_LotSizeMulti=m_LotSizeMulti*PM_LCCnDLRCC_Multi;
+
+   if(PositionSummary[m_Session].pyramidStarted)
+      PositionSummary[m_Session].lastSizeMulti=m_LotSizeMulti;
+
+   if(m_PositionID!=No_Signal && m_LotSizeMulti!=0.0) 
       OpenPositionByPID(m_PositionType, m_LotSizeMulti, m_Session, m_PositionID);
-     
+
    return;     
 }
 
@@ -191,16 +195,20 @@ void MyOpenPositionCase3(int m_Session)
            } 
         }
       PositionSummary[m_Session].pyramidStarted=true;  
-      m_LotSizeMulti=m_LotSizeMulti*PyramidGloConst.pydStartSizeMulti;
       PositionSummary[m_Session].pyramidPID=m_PositionID;
       PositionSummary[m_Session].pyramidTrend=m_Trend;  
       PositionSummary[m_Session].lastWmaS=WmaSValue;
      }        
    
+   if(CurPM[m_Session]==LongReverseCon || CurPM[m_Session]==DLRCon)
+      m_LotSizeMulti=m_LotSizeMulti*PM_LRCnDLRC_Multi;
+   else if(CurPM[m_Session]==LongCounterCon || CurPM[m_Session]==DLRCCon)
+      m_LotSizeMulti=m_LotSizeMulti*PM_LCCnDLRCC_Multi;
+
    if(PositionSummary[m_Session].pyramidStarted)
-      m_LotSizeMulti = m_LotSizeMulti*PyramidGloConst.pydStartSizeMulti;
-   
-   if(m_PositionID!=No_Signal)
+      PositionSummary[m_Session].lastSizeMulti=m_LotSizeMulti;
+
+   if(m_PositionID!=No_Signal && m_LotSizeMulti!=0.0) 
       OpenPositionByPID(m_PositionType, m_LotSizeMulti, m_Session, m_PositionID);
      
    return;     
@@ -260,12 +268,12 @@ void MyClosePositionCase2(int m_Session)
       if( ( (CurPM[m_Session]==LongCounter) && (BeforePM[m_Session]==LongReverseCon) ) || 
           (CurPM[m_Session]==LongCounterCon) )
         {
-         ClosePositionByPID(m_Session, Buy_LR);
+         ClosePositionByPID(m_Session, Buy_LR, true, UpTrend);
         }
       else if( ( (CurPM[m_Session]==DoubleLongReverse) && (BeforePM[m_Session]==LongCounterCon) ) ||
                (CurPM[m_Session]==DLRCon) ) 
         {
-         ClosePositionByPID(m_Session, Sell_LC);
+         ClosePositionByPID(m_Session, Sell_LC, true, DownTrend);
         }      
       else if(CurPM[m_Session]==DLRCCon)
         {
@@ -279,12 +287,12 @@ void MyClosePositionCase2(int m_Session)
       if( ( (CurPM[m_Session]==LongCounter) && (BeforePM[m_Session]==LongReverseCon) ) || 
           (CurPM[m_Session]==LongCounterCon) )
         {
-         ClosePositionByPID(m_Session, Sell_LR);
+         ClosePositionByPID(m_Session, Sell_LR, true, DownTrend);
         }
       else if( ( (CurPM[m_Session]==DoubleLongReverse) && (BeforePM[m_Session]==LongCounterCon) ) ||
                (CurPM[m_Session]==DLRCon) )
         {
-         ClosePositionByPID(m_Session, Buy_LC);
+         ClosePositionByPID(m_Session, Buy_LC, true, UpTrend );
         }
       else if(CurPM[m_Session]==DLRCCon)
         {

@@ -25,6 +25,10 @@ double val[],valc[];
 //+------------------------------------------------------------------+
 int OnInit()
   {
+
+   ArrayInitialize(val,0.0);
+   ArrayInitialize(valc,0); 
+   
 //--- indicator buffers mapping
    SetIndexBuffer(0,val,INDICATOR_DATA);
    SetIndexBuffer(1,valc,INDICATOR_COLOR_INDEX);

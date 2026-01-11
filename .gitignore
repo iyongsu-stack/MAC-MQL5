@@ -1,0 +1,22 @@
+# --- MQL5 실행 파일 및 컴파일 결과물 ---
+*.ex5
+*.ex4
+
+# --- 로그 및 임시 파일 ---
+*.log
+*.tmp
+*.bak
+
+# --- MetaEditor 및 시스템 관련 ---
+/.crp
+/.pre
+/.meta
+
+# --- 빌드 결과물 및 라이브러리 캐시 ---
+/Logs/
+/Files/
+/Tester/
+
+# --- 운영체제 관련 ---
+Thumbs.db
+.DS_Store
