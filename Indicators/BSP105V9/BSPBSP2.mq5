@@ -162,37 +162,114 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
 
 
        double tempBuyRatio, tempSellRatio, tempTotalPressure ;
-
-       tempBuyRatio = close[bar]<open[bar] ?       (close[bar-1]<open[bar] ?               MathMax(high[bar]-close[bar-1], close[bar]-low[bar]) :
-                               /* close[1]>=open */             MathMax(high[bar]-open[bar], close[bar]-low[bar])) : 
-             (close[bar]>open[bar] ?       (close[bar-1]>open[bar] ?               high[bar]-low[bar] : 
-                               /* close[1]>=open */             MathMax(open[bar]-close[bar-1], high[bar]-low[bar])) :           
-             /*close == open*/   (high[bar]-close[bar]>close[bar]-low[bar] ?       
-                                                               (close[bar-1]<open[bar] ?              MathMax(high[bar]-close[bar-1],close[bar]-low[bar]) : 
-                                                               /*close[1]>=open */           high[bar]-open[bar]) : 
-                                 (high[bar]-close[bar]<close[bar]-low[bar] ? 
-                                                               (close[bar-1]>open[bar] ?              high[bar]-low[bar] : 
-                                                                                             MathMax(open[bar]-close[bar-1], high[bar]-low[bar])) : 
-                               /* high-close<=close-low */                             
-                                                               (close[bar-1]>open[bar] ?              MathMax(high[bar]-open[bar], close[bar]-low[bar]) : 
-                                                               (close[bar-1]<open[bar] ?              MathMax(open[bar]-close[bar-1], high[bar]-low[bar]) : 
-                                                               /* close[1]==open */          high[bar]-low[bar])))))  ;  
-                 
-         tempSellRatio = close[bar]<open[bar] ?       (close[bar-1]>open[bar] ?              MathMax(close[bar-1]-open[bar], high[bar]-low[bar]):
-                                                               high[bar]-low[bar]) : 
-              (close[bar]>open[bar] ?      (close[bar-1]>open[bar] ?              MathMax(close[bar-1]-low[bar], high[bar]-close[bar]) :
-                                                               MathMax(open[bar]-low[bar], high[bar]-close[bar])) : 
-              /*close == open*/  (high[bar]-close[bar]>close[bar]-low[bar] ?   
-                                                               (close[bar-1]>open[bar] ?               MathMax(close[bar-1]-open[bar], high[bar]-low[bar]) : 
-                                                                                              high[bar]-low[bar]) : 
-                                 (high[bar]-close[bar]<close[bar]-low[bar] ?      
-                                                               (close[bar-1]>open[bar] ?               MathMax(close[bar-1]-low[bar], high[bar]-close[bar]) : 
-                                                                                              open[bar]-low[bar]) : 
-                                 /* high-close<=close-low */                              
-                                                               (close[bar-1]>open[bar] ?               MathMax(close[bar-1]-open[bar], high[bar]-low[bar]) : 
-                                                               (close[bar-1]<open[bar] ?               MathMax(open[bar]-low[bar], high[bar]-close[bar]) : 
-                                                                                              high[bar]-low[bar])))))   ;
        
+       // tempBuyRatio 계산 - 현재 캔들과 이전 캔들의 상태를 기반으로 계산
+       bool isCurrentBearish = (close[bar] < open[bar]);  // 현재 캔들이 약세(음봉)
+       bool isCurrentBullish = (close[bar] > open[bar]);  // 현재 캔들이 강세(양봉)
+       bool isCurrentDoji = (close[bar] == open[bar]);    // 현재 캔들이 도지(종가==시가)
+       bool isPrevBearish = (close[bar-1] < open[bar-1]); // 이전 캔들이 약세
+       bool isPrevBullish = (close[bar-1] > open[bar-1]); // 이전 캔들이 강세
+       bool isPrevDoji = (close[bar-1] == open[bar-1]);   // 이전 캔들이 도지
+       
+       double highClose = high[bar] - close[bar];  // 상단 여백
+       double closeLow = close[bar] - low[bar];    // 하단 여백
+       double range = high[bar] - low[bar];        // 캔들 범위
+       
+       // tempBuyRatio 계산
+       if (isCurrentBearish)
+       {
+          // 현재 캔들이 약세인 경우
+          if (isPrevBearish)
+             tempBuyRatio = MathMax(high[bar] - close[bar-1], close[bar] - low[bar]);
+          else
+             tempBuyRatio = MathMax(high[bar] - open[bar], close[bar] - low[bar]);
+       }
+       else if (isCurrentBullish)
+       {
+          // 현재 캔들이 강세인 경우
+          if (isPrevBullish)
+             tempBuyRatio = range;
+          else
+             tempBuyRatio = MathMax(open[bar] - close[bar-1], range);
+       }
+       else // isCurrentDoji
+       {
+          // 현재 캔들이 도지인 경우
+          if (highClose > closeLow)
+          {
+             // 상단 여백이 하단 여백보다 큰 경우
+             if (isPrevBearish)
+                tempBuyRatio = MathMax(high[bar] - close[bar-1], close[bar] - low[bar]);
+             else
+                tempBuyRatio = high[bar] - open[bar];
+          }
+          else if (highClose < closeLow)
+          {
+             // 하단 여백이 상단 여백보다 큰 경우
+             if (isPrevBullish)
+                tempBuyRatio = range;
+             else
+                tempBuyRatio = MathMax(open[bar] - close[bar-1], range);
+          }
+          else // highClose == closeLow
+          {
+             // 상단 여백과 하단 여백이 같은 경우
+             if (isPrevBullish)
+                tempBuyRatio = MathMax(high[bar] - open[bar], close[bar] - low[bar]);
+             else if (isPrevBearish)
+                tempBuyRatio = MathMax(open[bar] - close[bar-1], range);
+             else // isPrevDoji
+                tempBuyRatio = range;
+          }
+       }
+       
+       // tempSellRatio 계산
+       if (isCurrentBearish)
+       {
+          // 현재 캔들이 약세인 경우
+          if (isPrevBullish)
+             tempSellRatio = MathMax(close[bar-1] - open[bar], range);
+          else
+             tempSellRatio = range;
+       }
+       else if (isCurrentBullish)
+       {
+          // 현재 캔들이 강세인 경우
+          if (isPrevBullish)
+             tempSellRatio = MathMax(close[bar-1] - low[bar], high[bar] - close[bar]);
+          else
+             tempSellRatio = MathMax(open[bar] - low[bar], high[bar] - close[bar]);
+       }
+       else // isCurrentDoji
+       {
+          // 현재 캔들이 도지인 경우
+          if (highClose > closeLow)
+          {
+             // 상단 여백이 하단 여백보다 큰 경우
+             if (isPrevBullish)
+                tempSellRatio = MathMax(close[bar-1] - open[bar], range);
+             else
+                tempSellRatio = range;
+          }
+          else if (highClose < closeLow)
+          {
+             // 하단 여백이 상단 여백보다 큰 경우
+             if (isPrevBullish)
+                tempSellRatio = MathMax(close[bar-1] - low[bar], high[bar] - close[bar]);
+             else
+                tempSellRatio = open[bar] - low[bar];
+          }
+          else // highClose == closeLow
+          {
+             // 상단 여백과 하단 여백이 같은 경우
+             if (isPrevBullish)
+                tempSellRatio = MathMax(close[bar-1] - open[bar], range);
+             else if (isPrevBearish)
+                tempSellRatio = MathMax(open[bar] - low[bar], high[bar] - close[bar]);
+             else // isPrevDoji
+                tempSellRatio = range;
+          }
+       }
 
        tempTotalPressure=1.;
        tempBuyRatio = tempBuyRatio/tempTotalPressure;
