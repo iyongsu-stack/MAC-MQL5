@@ -11,39 +11,53 @@
 
 #property indicator_separate_window
 
-#property indicator_buffers 5
-#property indicator_plots   4
+#property indicator_buffers 9
+#property indicator_plots  7 
 
 #property indicator_type1   DRAW_LINE
 #property indicator_type2   DRAW_LINE
 #property indicator_type3   DRAW_LINE
 #property indicator_type4   DRAW_LINE
+#property indicator_type5   DRAW_LINE
+#property indicator_type6   DRAW_LINE
+#property indicator_type7   DRAW_COLOR_LINE
 
-#property indicator_color1  clrRed
-#property indicator_color2  clrGreen
-#property indicator_color3  clrYellow
+#property indicator_color1  clrWhite
+#property indicator_color2  clrWhite
+#property indicator_color3  clrWhite
 #property indicator_color4  clrWhite
+#property indicator_color5  clrWhite
+#property indicator_color6  clrWhite
+#property indicator_color7  clrGreen,clrRed
 
-#property indicator_style1  STYLE_SOLID
-#property indicator_style2  STYLE_SOLID
+#property indicator_style1  STYLE_DOT
+#property indicator_style2  STYLE_DASH
 #property indicator_style3  STYLE_SOLID
 #property indicator_style4  STYLE_SOLID
+#property indicator_style5  STYLE_DASH
+#property indicator_style6  STYLE_DOT
+#property indicator_style7  STYLE_SOLID
+
 
 #property indicator_width1  1
 #property indicator_width2  1
 #property indicator_width3  1
 #property indicator_width4  1
+#property indicator_width5  1
+#property indicator_width6  1
+#property indicator_width7  2
 
-input int                 AvgPeriod1    = 30;          // AvgPeriod1  
-input int                 AvgPeriod2    = 180;          // AvgPeriod2
-input int                 AvgPeriod3    = 3600;          // AvgPeriod3
-input int                 AvgPeriod4    = 72000;         // AvgPeriod4
+input int                 AvgPeriod    = 30;          // AvgPeriods  
+input int                 StdPeriod    = 5000;        // StdPeriod
+input double              MultiFactor1  = 1.0;        // MultiFactor1
+input double              MultiFactor2  = 2.0;        // MultiFactor2
+input double              MultiFactor3  = 3.0;        // MultiFactor3
+
+ENUM_APPLIED_VOLUME  VolumeType = VOLUME_TICK;    // Volume
 
 
-ENUM_APPLIED_VOLUME  VolumeType     = VOLUME_TICK;    // Volume
-
-
-double DiffBSP[], DiffBSPAvg1[], DiffBSPAvg2[], DiffBSPAvg3[], DiffBSPAvg4[];
+double DiffBSP[], DiffBSPAvg[], DiffBSPColor[], up3StdDiffBSP[], up2StdDiffBSP[], up1StdDiffBSP[], 
+                                down3StdDiffBSP[], down2StdDiffBSP[], down1StdDiffBSP[];
 double ToPoint;       
 
 //+------------------------------------------------------------------+  
@@ -51,20 +65,28 @@ void OnInit()
   {
 
    ArrayInitialize(DiffBSP,0.0);
-   ArrayInitialize(DiffBSPAvg1,0.0);
-   ArrayInitialize(DiffBSPAvg2,0.0);
-   ArrayInitialize(DiffBSPAvg3,0.0);
-   ArrayInitialize(DiffBSPAvg4,0.0);
+   ArrayInitialize(DiffBSPAvg,0.0);
+   ArrayInitialize(DiffBSPColor,0);
+   ArrayInitialize(up3StdDiffBSP,0.0);
+   ArrayInitialize(up2StdDiffBSP,0.0);
+   ArrayInitialize(up1StdDiffBSP,0.0);
+   ArrayInitialize(down1StdDiffBSP,0.0);
+   ArrayInitialize(down2StdDiffBSP,0.0);
+   ArrayInitialize(down3StdDiffBSP,0.0);
 
-   SetIndexBuffer(0, DiffBSPAvg1,INDICATOR_DATA);
-   SetIndexBuffer(1, DiffBSPAvg2,INDICATOR_DATA);
-   SetIndexBuffer(2, DiffBSPAvg3,INDICATOR_DATA);
-   SetIndexBuffer(3, DiffBSPAvg4,INDICATOR_DATA);
-   SetIndexBuffer(4, DiffBSP,INDICATOR_CALCULATIONS);
-     
+   SetIndexBuffer(0, up3StdDiffBSP,INDICATOR_DATA);
+   SetIndexBuffer(1, up2StdDiffBSP,INDICATOR_DATA);
+   SetIndexBuffer(2, up1StdDiffBSP,INDICATOR_DATA);
+   SetIndexBuffer(3, down1StdDiffBSP,INDICATOR_DATA);
+   SetIndexBuffer(4, down2StdDiffBSP,INDICATOR_DATA);
+   SetIndexBuffer(5, down3StdDiffBSP,INDICATOR_DATA);
+   SetIndexBuffer(6, DiffBSPAvg,INDICATOR_DATA);
+   SetIndexBuffer(7, DiffBSPColor,INDICATOR_COLOR_INDEX);
+   SetIndexBuffer(8, DiffBSP,INDICATOR_CALCULATIONS);
 
-   string short_name = "BSPPercentAvg("+ (string)AvgPeriod1 + ", "  + (string)AvgPeriod2 + ", " +
-                                       (string)AvgPeriod3 + ", " +  (string)AvgPeriod4 + ")";      
+   string short_name = "BSPercentAvgShort("+ (string)AvgPeriod + ", "  + (string)StdPeriod + ", " + 
+                  (string)MultiFactor1 + ", " + (string)MultiFactor2 + ", " + (string)MultiFactor3 + ")";
+
    IndicatorSetString(INDICATOR_SHORTNAME,short_name);
     
 //----
@@ -106,26 +128,22 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
                 const int &spread[])
   {
 
-   int first, second, third, fourth, fifth;
-   double mVolume;
+   int first, second, third;
+   double mVolume, standardDeviation;
    bool MnewBar = isNewBar(_Symbol);
 
 
    if(prev_calculated>rates_total || prev_calculated<=0) // checking for the first start of calculation of an indicator
      {
       first=2;  
-      second = first + AvgPeriod1;
-      third = first + AvgPeriod2;
-      fourth = first + AvgPeriod3;
-      fifth = first + AvgPeriod4;
+      second = first + AvgPeriod;
+      third = first + StdPeriod;
      }
    else
      { 
       first=prev_calculated-1; 
       second = first;
       third = first;
-      fourth = first;
-      fifth = first;
      } 
 
 
@@ -177,11 +195,23 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
        
        DiffBSP[bar]= MathAbs(tempBuyRatio) - MathAbs(tempSellRatio);
        
-       if(bar>=second)   DiffBSPAvg1[bar] = iAverage(bar, AvgPeriod1, DiffBSP);
-       if(bar>=third)   DiffBSPAvg2[bar] = iAverage(bar, AvgPeriod2, DiffBSP);
-       if(bar>=fourth && MnewBar)   DiffBSPAvg3[bar] = iAverage(bar, AvgPeriod3, DiffBSP);
-       if(bar>=fifth && MnewBar)   DiffBSPAvg4[bar] = iAverage(bar, AvgPeriod4, DiffBSP);
-        
+       if(bar>=second)   DiffBSPAvg[bar] = iAverage(bar, AvgPeriod, DiffBSP);
+       DiffBSPColor[bar] = (bar>0) ? (DiffBSPAvg[bar]>DiffBSPAvg[bar-1]) ? 0 : (DiffBSPAvg[bar]<DiffBSPAvg[bar-1]) ? 1 : DiffBSPAvg[bar-1] : 0;  
+
+       if((bar>=third) && MnewBar)
+       {
+          standardDeviation = StdDev3((bar-1), StdPeriod, DiffBSPAvg);
+
+          up1StdDiffBSP[bar]   =   standardDeviation * MultiFactor1;
+          down1StdDiffBSP[bar] =  -standardDeviation * MultiFactor1;
+
+          up2StdDiffBSP[bar]   =   standardDeviation * MultiFactor2;
+          down2StdDiffBSP[bar] =  -standardDeviation * MultiFactor2;
+
+          up3StdDiffBSP[bar]   =   standardDeviation * MultiFactor3;
+          down3StdDiffBSP[bar] =  -standardDeviation * MultiFactor3;
+       }  
+
      }  
 
    return(rates_total);
