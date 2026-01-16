@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                                       BSPBSP2.mq5 |
+//|                                            BSPercentAvgShort2.mq5 |
 //|                                                     Yong-su, Kim |
 //|                                             https://www.mql5.com |
 //+------------------------------------------------------------------+
@@ -48,7 +48,7 @@
 #property indicator_width6  1
 #property indicator_width7  2
 
-input int                 AvgPeriod     = 30;        // AvgPeriods  
+input int                 WmaPeriod     = 30;        // WmaPeriods  
 input int                 SmoothPeriod  = 5;        // SmoothPeriod
 input int                 StdPeriod     = 5000;      // StdPeriod
 input double              MultiFactor1  = 1.0;       // MultiFactor1
@@ -60,23 +60,27 @@ ENUM_APPLIED_VOLUME  VolumeType = VOLUME_TICK;    // Volume
 // 상수 정의
 #define MIN_TOTAL_PRESSURE 0.001
 
-double BuyRatio[], SellRatio[], AvgBuyRatio[], AvgSellRatio[], DiffRatio[], 
+double BuyRatio[], SellRatio[], WmaBuyRatio[], WmaSellRatio[], DiffRatio[], 
        SmoothDiffRatio[], SmoothDiffRatioC[], up3StdDiffBSP[], up2StdDiffBSP[], up1StdDiffBSP[], 
                                               down3StdDiffBSP[], down2StdDiffBSP[], down1StdDiffBSP[];
-double ToPoint;       
+double ToPoint;
+// SmoothDiffRatio의 RMS(=sqrt(sum(x^2)/N))를 빠르게 계산하기 위한 롤링 계산기
+HiStdDev3 *iStdDev3;
 
 //+------------------------------------------------------------------+  
 void OnInit()
   {
+   // 버퍼 초기 값이 차트에 "0"으로 그려지지 않도록 EmptyValue 지정
+   for(int p=0; p<7; p++)
+      PlotIndexSetDouble(p,PLOT_EMPTY_VALUE,EMPTY_VALUE);
 
    ArrayInitialize(BuyRatio,0.0);
    ArrayInitialize(SellRatio,0.0);
-   ArrayInitialize(AvgBuyRatio,0.0);
-   ArrayInitialize(AvgSellRatio,0.0);
+   ArrayInitialize(WmaBuyRatio,0.0);
+   ArrayInitialize(WmaSellRatio,0.0);
    ArrayInitialize(DiffRatio,0.0);
    ArrayInitialize(SmoothDiffRatio,0.0);
    ArrayInitialize(SmoothDiffRatioC,0);
-   ArrayInitialize(DiffRatio,0.0);
    ArrayInitialize(up3StdDiffBSP,0.0);
    ArrayInitialize(down3StdDiffBSP,0.0);
    ArrayInitialize(up2StdDiffBSP,0.0);
@@ -96,10 +100,10 @@ void OnInit()
    SetIndexBuffer(8, DiffRatio,INDICATOR_CALCULATIONS);
    SetIndexBuffer(9, BuyRatio,INDICATOR_CALCULATIONS);
    SetIndexBuffer(10, SellRatio,INDICATOR_CALCULATIONS);
-   SetIndexBuffer(11, AvgBuyRatio,INDICATOR_CALCULATIONS);
-   SetIndexBuffer(12, AvgSellRatio,INDICATOR_CALCULATIONS);
+   SetIndexBuffer(11, WmaBuyRatio,INDICATOR_CALCULATIONS);
+   SetIndexBuffer(12, WmaSellRatio,INDICATOR_CALCULATIONS);
 
-   string short_name = "BSPercentAvgStd("+ (string)AvgPeriod + ", "  + (string)SmoothPeriod +", "  + (string)StdPeriod + ", " + 
+   string short_name = "BSPercentWmaStd("+ (string)WmaPeriod + ", "  + (string)SmoothPeriod +", "  + (string)StdPeriod + ", " + 
                   (string)MultiFactor1 + ", " + (string)MultiFactor2 + ", " + (string)MultiFactor3 + ")";
 
    IndicatorSetString(INDICATOR_SHORTNAME,short_name);
@@ -122,9 +126,20 @@ void OnInit()
    string thisSymbol = StringSubstr(_Symbol, 0, 6);
    if(thisSymbol == GoldSymbol) ToPoint = 100.;
 
+   iStdDev3 = new HiStdDev3(StdPeriod);
+
+   if(CheckPointer(iStdDev3) == POINTER_INVALID)
+    {
+    Print("HiStdDev3 객체 생성 실패!");
+    }
+
   }
 
-
+  void OnDeinit(const int reason)
+  {
+     if(CheckPointer(iStdDev3) == POINTER_DYNAMIC)
+        delete iStdDev3;
+  }
 
 //+------------------------------------------------------------------+
 //| Custom indicator iteration function                              |
@@ -140,17 +155,29 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
                 const long &volume[],
                 const int &spread[])
   {
-   int first, second, third, fourth;
-   double mVolume, standardDeviation;
-   bool MnewBar = isNewBar(_Symbol);
+   // 입력값 방어 (0/음수 기간 방지)
+   const int wmaPeriod = (WmaPeriod>1) ? WmaPeriod : 2;
+   const int smoothPeriod = (SmoothPeriod>1) ? SmoothPeriod : 2;
+   const int stdPeriod = (StdPeriod>1) ? StdPeriod : 2;
 
-   // 첫 계산인지 확인
+   // 최소 바 수 체크 (bar-1 접근 + avg/smooth/std 윈도우 확보)
+   const int min_needed = 2 + wmaPeriod + smoothPeriod + stdPeriod;
+   if(rates_total <= min_needed)
+      return(0);
+
+   int first, second, third, fourth;
+   double standardDeviation;
+
+   // 첫 계산(히스토리 채움)에서는 new bar 여부와 무관하게 모두 계산
+   const bool MnewBar = (prev_calculated<=0) ? true : isNewBar(_Symbol);
+
+
    if(prev_calculated > rates_total || prev_calculated <= 0)
      {
       first = 2;  
-      second = first + AvgPeriod;
-      third = second + SmoothPeriod;
-      fourth = third + StdPeriod;
+      second = first + wmaPeriod;
+      third = second + smoothPeriod;
+      fourth = third + stdPeriod;
      }
    else
      { 
@@ -163,12 +190,6 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    // 메인 계산 루프
    for(int bar = first; bar < rates_total; bar++)
      {
-      // 인덱스 검증
-      if(bar <= 0) continue;
-        
-      if(VolumeType == VOLUME_TICK) mVolume = (double)tick_volume[bar];
-      else mVolume = (double)volume[bar];
-
       double tempBuyRatio = CalculateBuyRatio(open, high, low, close, bar);
       double tempSellRatio = CalculateSellRatio(open, high, low, close, bar);
       double tempTotalPressure = MathAbs(tempBuyRatio) + MathAbs(tempSellRatio);
@@ -182,40 +203,56 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
       
       if(bar >= second)
       {
-         AvgBuyRatio[bar] = iAverage(bar, AvgPeriod, BuyRatio);
-         AvgSellRatio[bar] = iAverage(bar, AvgPeriod, SellRatio);
-         DiffRatio[bar] = AvgBuyRatio[bar] - AvgSellRatio[bar];
+         WmaBuyRatio[bar] = iWma(bar, wmaPeriod, BuyRatio);
+         WmaSellRatio[bar] = iWma(bar, wmaPeriod, SellRatio);
+         DiffRatio[bar] = WmaBuyRatio[bar] - WmaSellRatio[bar];
+      }
+      else
+      {
+         // 충분한 히스토리가 없을 때는 EMPTY_VALUE로 설정
+         WmaBuyRatio[bar] = EMPTY_VALUE;
+         WmaSellRatio[bar] = EMPTY_VALUE;
+         DiffRatio[bar] = EMPTY_VALUE;
       }
 
       if(bar >= third) 
       {
          SmoothDiffRatio[bar] = iSmooth(DiffRatio[bar],SmoothPeriod,0,bar,rates_total);
          
-         if(SmoothDiffRatio[bar] > SmoothDiffRatio[bar-1] )
-            SmoothDiffRatioC[bar] = 0;
-         else if(SmoothDiffRatio[bar] < SmoothDiffRatio[bar-1])
-            SmoothDiffRatioC[bar] = 1;
+         if(MnewBar)
+         {
+            standardDeviation = iStdDev3.Calculate(SmoothDiffRatio[bar]);
+
+            up1StdDiffBSP[bar]   = standardDeviation * MultiFactor1;
+            down1StdDiffBSP[bar] = -standardDeviation * MultiFactor1;
+
+            up2StdDiffBSP[bar]   = standardDeviation * MultiFactor2;
+            down2StdDiffBSP[bar] = -standardDeviation * MultiFactor2;
+
+            up3StdDiffBSP[bar]   = standardDeviation * MultiFactor3;
+            down3StdDiffBSP[bar] = -standardDeviation * MultiFactor3;
+         }
+         
+         // DRAW_COLOR_LINE의 색상 인덱스는 0..N-1 (여기서는 0=Green, 1=Red)
+         if(bar > 0 && SmoothDiffRatio[bar] != EMPTY_VALUE && SmoothDiffRatio[bar-1] != EMPTY_VALUE)
+         {
+            if(SmoothDiffRatio[bar] > SmoothDiffRatio[bar-1])
+               SmoothDiffRatioC[bar] = 0;
+            else if(SmoothDiffRatio[bar] < SmoothDiffRatio[bar-1])
+               SmoothDiffRatioC[bar] = 1;
+            else
+               SmoothDiffRatioC[bar] = SmoothDiffRatioC[bar-1];
+         }
          else
-            SmoothDiffRatioC[bar] = SmoothDiffRatioC[bar-1];
-      } else {
-         SmoothDiffRatioC[bar] = 0;
+            SmoothDiffRatioC[bar] = (bar > 0) ? SmoothDiffRatioC[bar-1] : 0;
       }
-
-      // 표준편차 계산 (새로운 바가 형성되었을 때만)
-      if(bar >= fourth && MnewBar && bar > 0)
+      else
       {
-         standardDeviation = StdDev3(bar - 1, StdPeriod, SmoothDiffRatio);
-
-         up1StdDiffBSP[bar]   = standardDeviation * MultiFactor1;
-         down1StdDiffBSP[bar] = -standardDeviation * MultiFactor1;
-
-         up2StdDiffBSP[bar]   = standardDeviation * MultiFactor2;
-         down2StdDiffBSP[bar] = -standardDeviation * MultiFactor2;
-
-         up3StdDiffBSP[bar]   = standardDeviation * MultiFactor3;
-         down3StdDiffBSP[bar] = -standardDeviation * MultiFactor3;
-      }  
-     }  
+         SmoothDiffRatio[bar] = EMPTY_VALUE;
+         SmoothDiffRatioC[bar] = (bar > 0) ? SmoothDiffRatioC[bar-1] : 0;
+      }
+      
+    }  
 
    return(rates_total);
   }
