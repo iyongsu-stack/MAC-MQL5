@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                               BSPercentAvgShort.mq5 |
+//|                                           BSPercentAvgShort.mq5 |
 //|                                                     Yong-su, Kim |
 //|                                             https://www.mql5.com |
 //+------------------------------------------------------------------+
@@ -68,6 +68,8 @@ double BuyRatio[], SellRatio[], AvgBuyRatio[], AvgSellRatio[], DiffRatio[],
 double ToPoint;
 // SmoothDiffRatio의 RMS(=sqrt(sum(x^2)/N))를 빠르게 계산하기 위한 롤링 계산기
 HiStdDev3 *iStdDev3;
+HiAverage *iAverageBuy;   // BuyRatio용 평균 계산기
+HiAverage *iAverageSell;  // SellRatio용 평균 계산기
 
 //+------------------------------------------------------------------+  
 void OnInit()
@@ -129,11 +131,13 @@ void OnInit()
    if(thisSymbol == GoldSymbol) ToPoint = 100.;
 
    iStdDev3 = new HiStdDev3(StdPeriod);
+   if(CheckPointer(iStdDev3) == POINTER_INVALID)   Print("HiStdDev3 객체 생성 실패!");
 
-   if(CheckPointer(iStdDev3) == POINTER_INVALID)
-    {
-    Print("HiStdDev3 객체 생성 실패!");
-    }
+   iAverageBuy = new HiAverage(AvgPeriod);
+   if(CheckPointer(iAverageBuy) == POINTER_INVALID)   Print("HiAverageBuy 객체 생성 실패!");
+
+   iAverageSell = new HiAverage(AvgPeriod);
+   if(CheckPointer(iAverageSell) == POINTER_INVALID)   Print("HiAverageSell 객체 생성 실패!");
 
   }
 
@@ -141,6 +145,10 @@ void OnInit()
   {
      if(CheckPointer(iStdDev3) == POINTER_DYNAMIC)
         delete iStdDev3;
+     if(CheckPointer(iAverageBuy) == POINTER_DYNAMIC)
+        delete iAverageBuy;
+     if(CheckPointer(iAverageSell) == POINTER_DYNAMIC)
+        delete iAverageSell;
   }
 
 //+------------------------------------------------------------------+
@@ -205,8 +213,8 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
       
       if(bar >= second)
       {
-         AvgBuyRatio[bar] = iAverage(bar, AvgPeriod, BuyRatio);
-         AvgSellRatio[bar] = iAverage(bar, AvgPeriod, SellRatio);
+         AvgBuyRatio[bar] = iAverageBuy.Calculate(BuyRatio[bar]);
+         AvgSellRatio[bar] = iAverageSell.Calculate(SellRatio[bar]);
          DiffRatio[bar] = AvgBuyRatio[bar] - AvgSellRatio[bar];
       }
       else
@@ -219,7 +227,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
 
       if(bar >= third) 
       {
-         SmoothDiffRatio[bar] = iSmooth(DiffRatio[bar],SmoothPeriod,0,bar,rates_total);
+         SmoothDiffRatio[bar] = iSmooth(DiffRatio[bar],SmoothPeriod,0,bar,rates_total,0);
          
          if(MnewBar)
          {

@@ -2,6 +2,7 @@
 //|                                        mySmoothingAlgorithms.mqh |
 //|                                                     Yong-su, Kim |
 //+------------------------------------------------------------------+
+
 #property copyright "Yong-su, Kim"
 #property version   "1.00"
 
@@ -292,7 +293,7 @@ double iNlr(double price,int Length,int shift,int desiredBar,int bars,int instan
 }
 
 // Average Function of array
-double iAverage(int end, int avgPeriod, const double &S_Array[])
+double myAverage(int end, int avgPeriod, const double &S_Array[])
 {
     double sum;
     sum=0.0;
@@ -340,8 +341,68 @@ bool isNewBar(string sym)
    return (false);
 }
 
+//// average Class of array
+class HiAverage
+{
+private:
+   double m_buffer[];    // 데이터를 담을 순환 버퍼
+   int    m_size;        // 윈도우 크기
+   int    m_index;       // 현재 쓰기 위치 포인터
+   int    m_count;       // 현재까지 쌓인 데이터 수
+   double m_sum;         // 합계 유지
+//   double m_sum_sq;      // 제곱합 유지
 
-//// Standard Deviation Class of array
+public:
+   // 생성자
+   HiAverage(int window_size)
+   {
+      m_size = window_size;
+      ArrayResize(m_buffer, m_size);
+      ArrayInitialize(m_buffer, 0.);
+      Reset();
+   }
+
+   void Reset()
+   {
+      m_index = 0;
+      m_count = 0;
+      m_sum = 0;
+//      m_sum_sq = 0;
+   }
+
+   // 데이터 추가 및 계산 (매 분마다 호출)
+   double Calculate(double price)
+   {
+      // 1. 오래된 데이터 제거 (버퍼가 꽉 찼을 때만)
+      if(m_count >= m_size)
+      {
+         double old_val = m_buffer[m_index];
+         m_sum -= old_val;
+//         m_sum_sq -= (old_val * old_val);
+      }
+      else m_count++;
+
+      // 2. 새 데이터 추가
+      m_buffer[m_index] = price;
+      m_sum += price;
+//      m_sum_sq += (price * price);
+
+      // 3. 인덱스 순환
+      m_index = (m_index + 1) % m_size;
+
+      // 4. 평균 계산 (O(1))
+      if(m_count < 2) return 0;
+      
+      double mean = m_sum / m_count;
+//      double variance = (m_sum_sq / m_count) - (mean * mean);
+//      double variance = (m_sum_sq / m_count);
+      return mean;
+//      return MathSqrt(MathMax(0, variance));
+   }
+};
+
+
+//// StdDev Class of array
 class HiStdDev3
 {
 private:

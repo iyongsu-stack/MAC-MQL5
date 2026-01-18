@@ -1,11 +1,13 @@
 //+------------------------------------------------------------------+
-//|                                            BSPercentAvgShort.mq5 |
+//|                                           BSPercentAvgShort2.mq5 |
 //|                                                     Yong-su, Kim |
 //|                                             https://www.mql5.com |
 //+------------------------------------------------------------------+
+
 #property copyright "Yong-su, Kim"
 #property link      "https://www.mql5.com"
 #property version   "1.01"
+
 
 #include <mySmoothingAlgorithm.mqh>
 #include <myBSPCalculation.mqh>
@@ -48,7 +50,7 @@
 #property indicator_width6  1
 #property indicator_width7  2
 
-input int                 WmaPeriod     = 30;        // WmaPeriods  
+input int                 AvgPeriod     = 30;        // AvgPeriods  
 input int                 SmoothPeriod  = 5;        // SmoothPeriod
 input int                 StdPeriod     = 5000;      // StdPeriod
 input double              MultiFactor1  = 1.0;       // MultiFactor1
@@ -60,12 +62,14 @@ ENUM_APPLIED_VOLUME  VolumeType = VOLUME_TICK;    // Volume
 // 상수 정의
 #define MIN_TOTAL_PRESSURE 0.001
 
-double BuyRatio[], SellRatio[], WmaBuyRatio[], WmaSellRatio[], DiffRatio[], 
+double BuyRatio[], SellRatio[], AvgBuyRatio[], AvgSellRatio[], DiffRatio[], 
        SmoothDiffRatio[], SmoothDiffRatioC[], up3StdDiffBSP[], up2StdDiffBSP[], up1StdDiffBSP[], 
                                               down3StdDiffBSP[], down2StdDiffBSP[], down1StdDiffBSP[];
 double ToPoint;
 // SmoothDiffRatio의 RMS(=sqrt(sum(x^2)/N))를 빠르게 계산하기 위한 롤링 계산기
 HiStdDev3 *iStdDev3;
+HiAverage *iAverageBuy;   // BuyRatio용 평균 계산기
+HiAverage *iAverageSell;  // SellRatio용 평균 계산기
 
 //+------------------------------------------------------------------+  
 void OnInit()
@@ -76,8 +80,8 @@ void OnInit()
 
    ArrayInitialize(BuyRatio,0.0);
    ArrayInitialize(SellRatio,0.0);
-   ArrayInitialize(WmaBuyRatio,0.0);
-   ArrayInitialize(WmaSellRatio,0.0);
+   ArrayInitialize(AvgBuyRatio,0.0);
+   ArrayInitialize(AvgSellRatio,0.0);
    ArrayInitialize(DiffRatio,0.0);
    ArrayInitialize(SmoothDiffRatio,0.0);
    ArrayInitialize(SmoothDiffRatioC,0);
@@ -100,10 +104,10 @@ void OnInit()
    SetIndexBuffer(8, DiffRatio,INDICATOR_CALCULATIONS);
    SetIndexBuffer(9, BuyRatio,INDICATOR_CALCULATIONS);
    SetIndexBuffer(10, SellRatio,INDICATOR_CALCULATIONS);
-   SetIndexBuffer(11, WmaBuyRatio,INDICATOR_CALCULATIONS);
-   SetIndexBuffer(12, WmaSellRatio,INDICATOR_CALCULATIONS);
+   SetIndexBuffer(11, AvgBuyRatio,INDICATOR_CALCULATIONS);
+   SetIndexBuffer(12, AvgSellRatio,INDICATOR_CALCULATIONS);
 
-   string short_name = "BSPercentWmaStd("+ (string)WmaPeriod + ", "  + (string)SmoothPeriod +", "  + (string)StdPeriod + ", " + 
+   string short_name = "BSPercentAvgStd2("+ (string)AvgPeriod + ", "  + (string)SmoothPeriod +", "  + (string)StdPeriod + ", " + 
                   (string)MultiFactor1 + ", " + (string)MultiFactor2 + ", " + (string)MultiFactor3 + ")";
 
    IndicatorSetString(INDICATOR_SHORTNAME,short_name);
@@ -127,11 +131,13 @@ void OnInit()
    if(thisSymbol == GoldSymbol) ToPoint = 100.;
 
    iStdDev3 = new HiStdDev3(StdPeriod);
+   if(CheckPointer(iStdDev3) == POINTER_INVALID)   Print("HiStdDev3 객체 생성 실패!");
 
-   if(CheckPointer(iStdDev3) == POINTER_INVALID)
-    {
-    Print("HiStdDev3 객체 생성 실패!");
-    }
+   iAverageBuy = new HiAverage(AvgPeriod);
+   if(CheckPointer(iAverageBuy) == POINTER_INVALID)   Print("HiAverageBuy 객체 생성 실패!");
+
+   iAverageSell = new HiAverage(AvgPeriod);
+   if(CheckPointer(iAverageSell) == POINTER_INVALID)   Print("HiAverageSell 객체 생성 실패!");
 
   }
 
@@ -139,6 +145,10 @@ void OnInit()
   {
      if(CheckPointer(iStdDev3) == POINTER_DYNAMIC)
         delete iStdDev3;
+     if(CheckPointer(iAverageBuy) == POINTER_DYNAMIC)
+        delete iAverageBuy;
+     if(CheckPointer(iAverageSell) == POINTER_DYNAMIC)
+        delete iAverageSell;
   }
 
 //+------------------------------------------------------------------+
@@ -156,12 +166,12 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
                 const int &spread[])
   {
    // 입력값 방어 (0/음수 기간 방지)
-   const int wmaPeriod = (WmaPeriod>1) ? WmaPeriod : 2;
+   const int avgPeriod = (AvgPeriod>1) ? AvgPeriod : 2;
    const int smoothPeriod = (SmoothPeriod>1) ? SmoothPeriod : 2;
    const int stdPeriod = (StdPeriod>1) ? StdPeriod : 2;
 
    // 최소 바 수 체크 (bar-1 접근 + avg/smooth/std 윈도우 확보)
-   const int min_needed = 2 + wmaPeriod + smoothPeriod + stdPeriod;
+   const int min_needed = 2 + avgPeriod + smoothPeriod + stdPeriod;
    if(rates_total <= min_needed)
       return(0);
 
@@ -175,7 +185,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    if(prev_calculated > rates_total || prev_calculated <= 0)
      {
       first = 2;  
-      second = first + wmaPeriod;
+      second = first + avgPeriod;
       third = second + smoothPeriod;
       fourth = third + stdPeriod;
      }
@@ -203,21 +213,21 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
       
       if(bar >= second)
       {
-         WmaBuyRatio[bar] = iWma(bar, wmaPeriod, BuyRatio);
-         WmaSellRatio[bar] = iWma(bar, wmaPeriod, SellRatio);
-         DiffRatio[bar] = WmaBuyRatio[bar] - WmaSellRatio[bar];
+         AvgBuyRatio[bar] = iAverageBuy.Calculate(BuyRatio[bar]);
+         AvgSellRatio[bar] = iAverageSell.Calculate(SellRatio[bar]);
+         DiffRatio[bar] = AvgBuyRatio[bar] - AvgSellRatio[bar];
       }
       else
       {
          // 충분한 히스토리가 없을 때는 EMPTY_VALUE로 설정
-         WmaBuyRatio[bar] = EMPTY_VALUE;
-         WmaSellRatio[bar] = EMPTY_VALUE;
+         AvgBuyRatio[bar] = EMPTY_VALUE;
+         AvgSellRatio[bar] = EMPTY_VALUE;
          DiffRatio[bar] = EMPTY_VALUE;
       }
 
       if(bar >= third) 
       {
-         SmoothDiffRatio[bar] = iSmooth(DiffRatio[bar],SmoothPeriod,0,bar,rates_total);
+         SmoothDiffRatio[bar] = iSmooth(DiffRatio[bar],SmoothPeriod,0,bar,rates_total,1);
          
          if(MnewBar)
          {
