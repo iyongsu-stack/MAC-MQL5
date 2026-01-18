@@ -8,7 +8,7 @@
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 
-#include <mySmoothAlgorithm2.mqh>
+#include <mySmoothingAlgorithm.mqh>
 #include <myBSPCalculation.mqh>
 
 #property indicator_separate_window
@@ -56,7 +56,7 @@ ENUM_APPLIED_VOLUME  VolumeType     = VOLUME_TICK;    // Volume
 input int                 LwmaPeriod    = 25;          // WmaPeriod1
 input int                 AvgPeriod    = 30;          //AvgPeriod
 input int                 StdPeriodL    = 5000;        // StdPeriodL
-input int                 StdPeriodS    = 1;        // StdPeriodS
+input int                 StdPeriodS    = 2;        // StdPeriodS(=2 고정)
 
 input double              MultiFactorL1  = 1.;         // StdMultiFactorL1
 input double              MultiFactorL2  = 2.0;         // StdMultiFactorL2
@@ -71,11 +71,17 @@ double DiffPressure[], LWMAVal[],
        up1StdAvgValLR[], up2StdAvgValLR[], up3StdAvgValLR[],
        down1StdAvgValLR[], down2StdAvgValLR[], down3StdAvgValLR[];
 
-double ToPoint;       
+double ToPoint;    
+
+HiStdDev1 *iStdDev1;
+HiStdDev2 *iStdDev2;
 
 //+------------------------------------------------------------------+  
 void OnInit()
   {
+   // 버퍼 초기 값이 차트에 "0"으로 그려지지 않도록 EmptyValue 지정
+   for(int p=0; p<7; p++)
+      PlotIndexSetDouble(p,PLOT_EMPTY_VALUE,EMPTY_VALUE);
 
    ArrayInitialize(DiffPressure,0.0);
    ArrayInitialize(LWMAVal,0.0);    
@@ -121,14 +127,26 @@ void OnInit()
       case 5: 
        ToPoint=MathPow(10., 5); break; 
      }   
-     string GoldSymbol = "XAUUSD";
-     string thisSymbol = StringSubstr(_Symbol, 0, 6);
-     if(thisSymbol == GoldSymbol) ToPoint = 100.;     
-     
+   string GoldSymbol = "XAUUSD";
+   string thisSymbol = StringSubstr(_Symbol, 0, 6);
+   if(thisSymbol == GoldSymbol) ToPoint = 100.;
+
+   iStdDev1 = new HiStdDev1(StdPeriodL);
+   if(CheckPointer(iStdDev1) == POINTER_INVALID)   Print("HiStdDev1 객체 생성 실패!");
+
+   iStdDev2 = new HiStdDev2(StdPeriodS);
+   if(CheckPointer(iStdDev2) == POINTER_INVALID)   Print("HiStdDev2 객체 생성 실패!");
+
 //----
   }
   
-  
+  void OnDeinit(const int reason)
+  {
+     if(CheckPointer(iStdDev1) == POINTER_DYNAMIC)
+        delete iStdDev1;
+     if(CheckPointer(iStdDev2) == POINTER_DYNAMIC)
+        delete iStdDev2;
+  }
   
 //+------------------------------------------------------------------+
 //| Custom indicator iteration function                              |
@@ -146,70 +164,90 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
                 const long &volume[],
                 const int &spread[])
   {
+   // 입력값 방어 (0/음수 기간 방지)
+   const int lwmaPeriod = (LwmaPeriod>1) ? LwmaPeriod : 2;
+   const int avgPeriod = (AvgPeriod>1) ? AvgPeriod : 2;
+   const int stdPeriodL = (StdPeriodL>1) ? StdPeriodL : 2;
+   const int stdPeriodS = (StdPeriodS>1) ? StdPeriodS : 2;
 
-   int first, second, third, fourth;
+   // 최소 바 수 체크 (bar-1 접근 + lwma/avg/std 윈도우 확보)
+   const int min_needed = 2 + lwmaPeriod + avgPeriod + MathMax(stdPeriodL, stdPeriodS);
+   if(rates_total <= min_needed)
+      return(0);
+
+   int first, second;
    double mVolume, standardDeviationL;
-   bool MnewBar = isNewBar(_Symbol);
-   
-   if(prev_calculated>rates_total || prev_calculated<=0) // checking for the first start of calculation of an indicator
+
+   // 첫 계산(히스토리 채움)에서는 new bar 여부와 무관하게 모두 계산
+   const bool MnewBar = (prev_calculated<=0) ? true : isNewBar(_Symbol);
+
+   if(prev_calculated > rates_total || prev_calculated <= 0)
      {
-      first=2; 
-      second  = first + AvgPeriod;
-      third = second + StdPeriodL;
-      fourth = second + StdPeriodS;
+      first = 2;  
+      second = first + avgPeriod;
      }
    else
      { 
-      first=prev_calculated-1;
-      second = first; 
-      third = first;
-      fourth = first;
+      first = prev_calculated - 1; 
+      second = first;
      } 
 
-
-//---- The main loop of the indicator calculation
-   for(int bar=first; bar<rates_total; bar++)
+   // 메인 계산 루프
+   for(int bar = first; bar < rates_total; bar++)
      {
-        
-       if(VolumeType == VOLUME_TICK) mVolume = (double)tick_volume[bar];
-       else mVolume = (double)volume[bar];
+      if(VolumeType == VOLUME_TICK) mVolume = (double)tick_volume[bar];
+      else mVolume = (double)volume[bar];
 
+      double tempBuyRatio = CalculateBuyRatio(open, high, low, close, bar);
+      double tempSellRatio = CalculateSellRatio(open, high, low, close, bar);
+      double tempDiffPressure = (MathAbs(tempBuyRatio) - MathAbs(tempSellRatio))*ToPoint;    
 
-       double tempBuyRatio = CalculateBuyRatio(open, high, low, close, bar);
-       double tempSellRatio = CalculateSellRatio(open, high, low, close, bar);
-       double tempDiffPressure = (MathAbs(tempBuyRatio) - MathAbs(tempSellRatio))*ToPoint;    
+      DiffPressure[bar] = DiffPressure[bar-1] + tempDiffPressure;
 
-       DiffPressure[bar] = DiffPressure[bar-1] + tempDiffPressure;
-
-       LWMAVal[bar]  = _lwma.calculate(DiffPressure[bar],bar,rates_total);
+      LWMAVal[bar] = _lwma.calculate(DiffPressure[bar], bar, rates_total);
              
-
-       if(bar>=second)
+      if(bar >= second)
        {
-          avgValLR[bar]= iAverage(bar, AvgPeriod, LWMAVal);
+         avgValLR[bar] = myAverage(bar, AvgPeriod, LWMAVal);
+
+         stdS[bar] = iStdDev2.Calculate(avgValLR[bar], LWMAVal[bar]);  
+         
+         // DRAW_COLOR_LINE의 색상 인덱스는 0..N-1 (여기서는 0=Green, 1=Red)
+         if(bar > 0 && stdS[bar] != EMPTY_VALUE && stdS[bar-1] != EMPTY_VALUE)
+         {
+            if(stdS[bar] > stdS[bar-1])
+               stdSC[bar] = 0;
+            else if(stdS[bar] < stdS[bar-1])
+               stdSC[bar] = 1;
+            else
+               stdSC[bar] = stdSC[bar-1];
+         }
+         else
+            stdSC[bar] = (bar > 0) ? stdSC[bar-1] : 0;
+
+         if(MnewBar)
+         {
+           standardDeviationL = iStdDev1.Calculate(avgValLR[bar], LWMAVal[bar]);
+
+           up1StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL1;
+           down1StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL1;
+
+           up2StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL2;
+           down2StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL2;
+
+           up3StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL3;
+           down3StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL3;
+         }
        }
-       
-       if((bar>=fourth) && MnewBar)
+      else
        {
-          standardDeviationL = StdDev((bar-1), StdPeriodL, avgValLR, LWMAVal);
+         // 충분한 히스토리가 없을 때는 EMPTY_VALUE로 설정
+         avgValLR[bar] = EMPTY_VALUE;
+         stdS[bar] = EMPTY_VALUE;
+         stdSC[bar] = (bar > 0) ? stdSC[bar-1] : 0;
+       }
+    }  
 
-          up1StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL1;
-          down1StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL1;
-
-          up2StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL2;
-          down2StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL2;
-
-          up3StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL3;
-          down3StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL3;
-       }  
-       
-       if(bar>=fifth)
-       {        
-          stdS[bar] = StdDev2(bar, StdPeriodS, avgValLR, LWMAVal);  
-          stdSC[bar] = (bar>0) ? (stdS[bar]>stdS[bar-1]) ? 0 : (stdS[bar]<stdS[bar-1]) ? 1 : stdS[bar-1] : 0;          
-       }  
-   }
-     
    return(rates_total);
   }
 //+----------------------
