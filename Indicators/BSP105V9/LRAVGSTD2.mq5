@@ -210,7 +210,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
        {
          avgValLR[bar] = myAverage(bar, AvgPeriod, LWMAVal);
 
-         stdS[bar] = iStdDev2.Calculate(avgValLR[bar], LWMAVal[bar]);  
+         stdS[bar] = iStdDev2.Calculate(bar, avgValLR[bar], LWMAVal[bar]);  
          
          // DRAW_COLOR_LINE의 색상 인덱스는 0..N-1 (여기서는 0=Green, 1=Red)
          if(bar > 0 && stdS[bar] != EMPTY_VALUE && stdS[bar-1] != EMPTY_VALUE)
@@ -227,7 +227,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
 
          if(MnewBar)
          {
-           standardDeviationL = iStdDev1.Calculate(avgValLR[bar], LWMAVal[bar]);
+           standardDeviationL = iStdDev1.Calculate(bar, avgValLR[bar], LWMAVal[bar]);
 
            up1StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL1;
            down1StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL1;

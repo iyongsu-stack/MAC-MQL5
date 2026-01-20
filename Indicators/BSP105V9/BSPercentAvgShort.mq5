@@ -69,6 +69,7 @@ double ToPoint;
 // SmoothDiffRatio의 RMS(=sqrt(sum(x^2)/N))를 빠르게 계산하기 위한 롤링 계산기
 HiStdDev3 *iStdDev3;
 
+
 //+------------------------------------------------------------------+  
 void OnInit()
   {
@@ -130,6 +131,7 @@ void OnInit()
 
    iStdDev3 = new HiStdDev3(StdPeriod);
    if(CheckPointer(iStdDev3) == POINTER_INVALID)   Print("HiStdDev3 객체 생성 실패!");
+
 
   }
 
@@ -219,7 +221,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
          
          if(MnewBar)
          {
-            standardDeviation = iStdDev3.Calculate(SmoothDiffRatio[bar]);
+            standardDeviation = iStdDev3.Calculate(bar, SmoothDiffRatio[bar]);
 
             up1StdDiffBSP[bar]   = standardDeviation * MultiFactor1;
             down1StdDiffBSP[bar] = -standardDeviation * MultiFactor1;
