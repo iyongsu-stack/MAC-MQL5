@@ -11,48 +11,38 @@
 #include <mySmoothingAlgorithm.mqh>
 //--- indicator settings
 #property indicator_separate_window
-#property indicator_buffers 10
-#property indicator_plots   7
+#property indicator_buffers 8
+#property indicator_plots   5
 
 #property indicator_type1   DRAW_LINE
 #property indicator_type2   DRAW_LINE
 #property indicator_type3   DRAW_LINE
 #property indicator_type4   DRAW_LINE
-#property indicator_type5   DRAW_LINE
-#property indicator_type6   DRAW_LINE
-#property indicator_type7   DRAW_COLOR_LINE
+#property indicator_type5   DRAW_COLOR_LINE
 
 #property indicator_color1  clrYellow
 #property indicator_color2  clrYellow
 #property indicator_color3  clrYellow
 #property indicator_color4  clrYellow
-#property indicator_color5  clrYellow
-#property indicator_color6  clrYellow
-#property indicator_color7  clrGreen,clrRed
+#property indicator_color5  clrGreen,clrRed
 
 #property indicator_style1  STYLE_DOT
 #property indicator_style2  STYLE_DASH
 #property indicator_style3  STYLE_SOLID
 #property indicator_style4  STYLE_SOLID
-#property indicator_style5  STYLE_DASH
-#property indicator_style6  STYLE_DOT
-#property indicator_style7  STYLE_SOLID
+#property indicator_style5  STYLE_SOLID
 
 #property indicator_width1  1
 #property indicator_width2  1
 #property indicator_width3  1
 #property indicator_width4  1
-#property indicator_width5  1
-#property indicator_width6  1
-#property indicator_width7  2
+#property indicator_width5  2
 
 #property indicator_label1  "StdDev+3"
 #property indicator_label2  "StdDev+2"
 #property indicator_label3  "StdDev+1"
 #property indicator_label4  "StdDev-1"
-#property indicator_label5  "StdDev-2"
-#property indicator_label6  "StdDev-3"
-#property indicator_label7  "CHV"
+#property indicator_label5  "CHV"
 
 #property indicator_level1 0.
 
@@ -64,10 +54,10 @@ enum SmoothMethod
    WMA=2 // Weighted MA
   };
 //--- input parameters
-input int          InpSmoothPeriod=10;  // Smoothing period
-input int          InpCHVPeriod=10;     // CHV period
-input SmoothMethod InpSmoothType=EMA;   // Smoothing method
-input int          InpStdDevPeriod=20;  // StdDev period
+input int          InpSmoothPeriod=30;  // Smoothing period
+input int          InpCHVPeriod=30;     // CHV period
+input SmoothMethod InpSmoothType=WMA;   // Smoothing method
+input int          InpStdDevPeriod=5000;// StdDev period
 input double       InpMultiFactor1=1.0; // StdDev MultiFactor1
 input double       InpMultiFactor2=2.0; // StdDev MultiFactor2
 input double       InpMultiFactor3=3.0; // StdDev MultiFactor3
@@ -76,8 +66,6 @@ double             ExtUp3StdBuffer[];
 double             ExtUp2StdBuffer[];
 double             ExtUp1StdBuffer[];
 double             ExtDown1StdBuffer[];
-double             ExtDown2StdBuffer[];
-double             ExtDown3StdBuffer[];
 double             ExtCHVBuffer[];
 double             ExtCHVColorBuffer[];
 double             ExtHLBuffer[];
@@ -102,21 +90,21 @@ void OnInit()
 //--- check inputs
    if(InpSmoothPeriod<=0)
      {
-      ExtSmoothPeriod=10;
+      ExtSmoothPeriod=30;
       printf("Incorrect value for input variable InpSmoothPeriod=%d. Indicator will use value=%d for calculations.",InpSmoothPeriod,ExtSmoothPeriod);
      }
    else ExtSmoothPeriod=InpSmoothPeriod;
    
    if(InpCHVPeriod<=0)
      {
-      ExtCHVPeriod=10;
+      ExtCHVPeriod=30;
       printf("Incorrect value for input variable InpCHVPeriod=%d. Indicator will use value=%d for calculations.",InpCHVPeriod,ExtCHVPeriod);
      }
    else ExtCHVPeriod=InpCHVPeriod;
    
    if(InpStdDevPeriod<=0)
      {
-      ExtStdDevPeriod=20;
+      ExtStdDevPeriod=5000;
       printf("Incorrect value for input variable InpStdDevPeriod=%d. Indicator will use value=%d for calculations.",InpStdDevPeriod,ExtStdDevPeriod);
      }
    else ExtStdDevPeriod=InpStdDevPeriod;
@@ -130,7 +118,7 @@ void OnInit()
       printf("WARNING: Incorrect value for input variable InpMultiFactor3=%.2f. Should be positive.",InpMultiFactor3);
 
 //--- set EmptyValue for plots
-   for(int p=0; p<7; p++)
+   for(int p=0; p<5; p++)
       PlotIndexSetDouble(p,PLOT_EMPTY_VALUE,EMPTY_VALUE);
 
 //---- define buffers
@@ -138,23 +126,19 @@ void OnInit()
    SetIndexBuffer(1,ExtUp2StdBuffer,INDICATOR_DATA);
    SetIndexBuffer(2,ExtUp1StdBuffer,INDICATOR_DATA);
    SetIndexBuffer(3,ExtDown1StdBuffer,INDICATOR_DATA);
-   SetIndexBuffer(4,ExtDown2StdBuffer,INDICATOR_DATA);
-   SetIndexBuffer(5,ExtDown3StdBuffer,INDICATOR_DATA);
-   SetIndexBuffer(6,ExtCHVBuffer,INDICATOR_DATA);
-   SetIndexBuffer(7,ExtCHVColorBuffer,INDICATOR_COLOR_INDEX);
-   SetIndexBuffer(8,ExtHLBuffer,INDICATOR_CALCULATIONS);
-   SetIndexBuffer(9,ExtSHLBuffer,INDICATOR_CALCULATIONS);
+   SetIndexBuffer(4,ExtCHVBuffer,INDICATOR_DATA);
+   SetIndexBuffer(5,ExtCHVColorBuffer,INDICATOR_COLOR_INDEX);
+   SetIndexBuffer(6,ExtHLBuffer,INDICATOR_CALCULATIONS);
+   SetIndexBuffer(7,ExtSHLBuffer,INDICATOR_CALCULATIONS);
 
 //--- set draw begin
    int drawBegin = ExtSmoothPeriod+ExtCHVPeriod-1;
-   for(int p=0; p<7; p++)
+   for(int p=0; p<5; p++)
       PlotIndexSetInteger(p,PLOT_DRAW_BEGIN,drawBegin);
 
-//--- set index label
-   PlotIndexSetString(6,PLOT_LABEL,"CHV("+string(ExtSmoothPeriod)+","+MAName+")");
-
 //--- indicator name
-   IndicatorSetString(INDICATOR_SHORTNAME,"Chaikin Volatility("+string(ExtSmoothPeriod)+","+MAName+")");
+   IndicatorSetString(INDICATOR_SHORTNAME,"Chaikin Volatility("+string(ExtSmoothPeriod)+","+string(ExtCHVPeriod)+","+MAName+","+
+   string(ExtStdDevPeriod)+","+string(InpMultiFactor1)+","+string(InpMultiFactor2)+","+string(InpMultiFactor3)+")");
 //--- round settings
    IndicatorSetInteger(INDICATOR_DIGITS,1);
 
@@ -290,10 +274,8 @@ int OnCalculate(const int rates_total,
             ExtDown1StdBuffer[i] = -stdDev * mf1;
 
             ExtUp2StdBuffer[i]   =  stdDev * mf2;
-            ExtDown2StdBuffer[i] = -stdDev * mf2;
 
             ExtUp3StdBuffer[i]   =  stdDev * mf3;
-            ExtDown3StdBuffer[i] = -stdDev * mf3;
            }
          else
            {
@@ -303,9 +285,7 @@ int OnCalculate(const int rates_total,
                ExtUp1StdBuffer[i]   = ExtUp1StdBuffer[i-1];
                ExtDown1StdBuffer[i] = ExtDown1StdBuffer[i-1];
                ExtUp2StdBuffer[i]   = ExtUp2StdBuffer[i-1];
-               ExtDown2StdBuffer[i] = ExtDown2StdBuffer[i-1];
                ExtUp3StdBuffer[i]   = ExtUp3StdBuffer[i-1];
-               ExtDown3StdBuffer[i] = ExtDown3StdBuffer[i-1];
               }
            }
         }
@@ -315,9 +295,7 @@ int OnCalculate(const int rates_total,
          ExtUp1StdBuffer[i]   = EMPTY_VALUE;
          ExtDown1StdBuffer[i] = EMPTY_VALUE;
          ExtUp2StdBuffer[i]   = EMPTY_VALUE;
-         ExtDown2StdBuffer[i] = EMPTY_VALUE;
          ExtUp3StdBuffer[i]   = EMPTY_VALUE;
-         ExtDown3StdBuffer[i] = EMPTY_VALUE;
         }
      }
 //----
