@@ -358,3 +358,4 @@ bool isNewBar(string sym)
 
    return (false);
 }
+//git test

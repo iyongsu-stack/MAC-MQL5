@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(xargs:*)",
+      "Bash(npx:*)",
+      "Bash(brew list:*)",
+      "Bash(brew:*)",
+      "Bash(node --version)",
+      "Bash(npm view:*)",
+      "Bash(npm search:*)",
+      "mcp__brave-search__brave_web_search",
+      "Bash(uvx:*)",
+      "Bash(uv --version:*)",
+      "Bash(curl -LsSf https://astral.sh/uv/install.sh)",
+      "Bash(sh)",
+      "mcp__fetch__fetch",
+      "Bash(echo:*)",
+      "Bash(pip search:*)",
+      "Bash(pip index:*)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "filesystem",
+    "memory",
+    "brave-search",
+    "github",
+    "sequential-thinking",
+    "alphavantage",
+    "fetch",
+    "markitdown",
+    "python-interpreter",
+    "puppeteer",
+    "context7"
+  ],
+  "enableAllProjectMcpServers": true
+}
