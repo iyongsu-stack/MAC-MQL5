@@ -2,6 +2,7 @@
 //|                                        mySmoothingAlgorithms.mqh |
 //|                                                     Yong-su, Kim |
 //+------------------------------------------------------------------+
+
 #property copyright "Yong-su, Kim"
 #property version   "1.00"
 
@@ -294,12 +295,13 @@ double iNlr(double price,int Length,int shift,int desiredBar,int bars,int instan
 // Average Function of array
 double myAverage(int end, int avgPeriod, const double &S_Array[])
 {
-    double sum;
+    double sum, S_Array_Value=0.;
     sum=0.0;
       
     for(int i=end+1-avgPeriod;i<=end;i++)
     {
-          sum+=S_Array[i];
+      if(i<0) continue;
+      sum+=S_Array[i];   
     }
        
     return(sum/avgPeriod);
