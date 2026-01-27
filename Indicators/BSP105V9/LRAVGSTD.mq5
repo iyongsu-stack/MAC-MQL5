@@ -114,7 +114,7 @@ void OnInit()
                                             (string)MultiFactorL3 + ", "  + (string)MaxBSPMult +  ")";      
    IndicatorSetString(INDICATOR_SHORTNAME,short_name);
  
-   _lwma.init(LwmaPeriod);
+   _lwma.init((LwmaPeriod > 1) ? LwmaPeriod : 2);
 
    switch(_Digits)
      {
@@ -131,10 +131,10 @@ void OnInit()
    string thisSymbol = StringSubstr(_Symbol, 0, 6);
    if(thisSymbol == GoldSymbol) ToPoint = 100.;
 
-   iStdDev1 = new HiStdDev1(StdPeriodL);
+   iStdDev1 = new HiStdDev1((StdPeriodL > 1) ? StdPeriodL : 2);
    if(CheckPointer(iStdDev1) == POINTER_INVALID)   Print("HiStdDev1 객체 생성 실패!");
 
-   iStdDev2 = new HiStdDev2(StdPeriodS);
+   iStdDev2 = new HiStdDev2((StdPeriodS > 1) ? StdPeriodS : 2);
    if(CheckPointer(iStdDev2) == POINTER_INVALID)   Print("HiStdDev2 객체 생성 실패!");
 
 //----
@@ -185,6 +185,35 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
      {
       first = 2;  
       second = first + avgPeriod;
+      
+      // [Bug Fix] 전체 재계산 시 버퍼 초기화 필수
+      // 초기화하지 않으면 DiffPressure[1]에 이전 쓰레기 값이 남아 누적 연산이 폭발함
+      ArrayInitialize(DiffPressure,0.0);
+      ArrayInitialize(LWMAVal,0.0);    
+      ArrayInitialize(avgValLR,0.0);
+      ArrayInitialize(stdS,0.0);
+      ArrayInitialize(stdSC,0);
+      ArrayInitialize(up1StdAvgValLR,0.0);
+      ArrayInitialize(up2StdAvgValLR,0.0);
+      ArrayInitialize(up3StdAvgValLR,0.0);   
+      ArrayInitialize(down1StdAvgValLR,0.0);
+      ArrayInitialize(down2StdAvgValLR,0.0);
+      ArrayInitialize(down3StdAvgValLR,0.0); 
+     
+      // [Bug Fix] 객체 상태 초기화 (Stateful Object Reset)
+      // iStdDev 객체들이 내부적으로 이전 계산 상태(누적값 등)를 가지고 있을 수 있으므로
+      // 전체 재계산 시 객체를 새로 생성하여 상태를 리셋해야 합니다.
+      if(CheckPointer(iStdDev1) == POINTER_DYNAMIC) delete iStdDev1;
+      if(CheckPointer(iStdDev2) == POINTER_DYNAMIC) delete iStdDev2;
+      
+      iStdDev1 = new HiStdDev1(stdPeriodL); // 위에서 정의한 안전한 로컬 변수 사용
+      if(CheckPointer(iStdDev1) == POINTER_INVALID) Print("OnCalculate: HiStdDev1 재생성 실패");
+      
+      iStdDev2 = new HiStdDev2(stdPeriodS); // 위에서 정의한 안전한 로컬 변수 사용
+      if(CheckPointer(iStdDev2) == POINTER_INVALID) Print("OnCalculate: HiStdDev2 재생성 실패");
+      
+      // _lwma 객체도 상태를 가질 수 있으므로 초기화
+      _lwma.init(lwmaPeriod); // 위에서 정의한 안전한 로컬 변수 사용
      }
    else
      { 

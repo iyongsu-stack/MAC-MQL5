@@ -178,6 +178,30 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
       second = first + wmaPeriod;
       third = second + smoothPeriod;
       fourth = third + stdPeriod;
+      
+      // [Bug Fix] 전체 재계산 시 버퍼 초기화 필수
+      // 초기화하지 않으면 이전 쓰레기 값이 남아 누적 연산이 폭발함
+      ArrayInitialize(BuyRatio,0.0);
+      ArrayInitialize(SellRatio,0.0);
+      ArrayInitialize(WmaBuyRatio,0.0);
+      ArrayInitialize(WmaSellRatio,0.0);
+      ArrayInitialize(DiffRatio,0.0);
+      ArrayInitialize(SmoothDiffRatio,0.0);
+      ArrayInitialize(SmoothDiffRatioC,0);
+      ArrayInitialize(up3StdDiffBSP,0.0);
+      ArrayInitialize(down3StdDiffBSP,0.0);
+      ArrayInitialize(up2StdDiffBSP,0.0);
+      ArrayInitialize(down2StdDiffBSP,0.0);
+      ArrayInitialize(up1StdDiffBSP,0.0);
+      ArrayInitialize(down1StdDiffBSP,0.0);
+     
+      // [Bug Fix] 객체 상태 초기화 (Stateful Object Reset)
+      // iStdDev3 객체가 내부적으로 이전 계산 상태(누적값 등)를 가지고 있을 수 있으므로
+      // 전체 재계산 시 객체를 새로 생성하여 상태를 리셋해야 합니다.
+      if(CheckPointer(iStdDev3) == POINTER_DYNAMIC) delete iStdDev3;
+      
+      iStdDev3 = new HiStdDev3(stdPeriod); // 위에서 정의한 안전한 로컬 변수 사용
+      if(CheckPointer(iStdDev3) == POINTER_INVALID) Print("OnCalculate: HiStdDev3 재생성 실패");
      }
    else
      { 

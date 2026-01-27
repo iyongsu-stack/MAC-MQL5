@@ -76,6 +76,7 @@ int            period_sm_sig;
 int            handle_rsi;
 int            weight_sumR;
 int            weight_sumS;
+const double   VolBandMultiplier=1.6185; // Golden Ratio for Volatility Band
 //--- includes
 #include <MovingAverages.mqh>
 //+------------------------------------------------------------------+
@@ -106,6 +107,7 @@ int OnInit()
    IndicatorSetDouble(INDICATOR_LEVELVALUE,1,50);
    IndicatorSetDouble(INDICATOR_LEVELVALUE,2,oversold);
    IndicatorSetString(INDICATOR_LEVELTEXT,0,"Overbought");
+   IndicatorSetString(INDICATOR_LEVELTEXT,1,"Center Line");
    IndicatorSetString(INDICATOR_LEVELTEXT,2,"Oversold");
 //--- setting plot buffer parameters
    PlotIndexSetInteger(2,PLOT_DRAW_TYPE,InpShowVBL);
@@ -171,8 +173,8 @@ int OnCalculate(const int rates_total,
          BufferTmpRSI[j-i]=BufferRSI[j];
          MA+=BufferRSI[j]/period_vb;
         }
-      BufferUpZone[i]=(MA + (1.6185 * StDev(BufferTmpRSI,period_vb)));
-      BufferDnZone[i]=(MA - (1.6185 * StDev(BufferTmpRSI,period_vb)));
+      BufferUpZone[i]=(MA + (VolBandMultiplier * StDev(BufferTmpRSI,period_vb)));
+      BufferDnZone[i]=(MA - (VolBandMultiplier * StDev(BufferTmpRSI,period_vb)));
       BufferMdZone[i]=((BufferUpZone[i]+BufferDnZone[i])/2);
      }
     

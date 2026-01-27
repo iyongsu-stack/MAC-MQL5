@@ -194,8 +194,29 @@ int OnCalculate(const int rates_total,
    const bool MnewBar = (prev_calculated<=0) ? true : isNewBar(_Symbol);
 
 //--- start working
-   if(prev_calculated<1)
+   if(prev_calculated<1 || prev_calculated > rates_total)
+     {
       pos=0;
+      
+      // [Bug Fix] 전체 재계산 시 버퍼 초기화 필수
+      // 초기화하지 않으면 이전 쓰레기 값이 남아 누적 연산이 폭발함
+      ArrayInitialize(ExtUp3StdBuffer,0.0);
+      ArrayInitialize(ExtUp2StdBuffer,0.0);
+      ArrayInitialize(ExtUp1StdBuffer,0.0);
+      ArrayInitialize(ExtDown1StdBuffer,0.0);
+      ArrayInitialize(ExtCHVBuffer,0.0);
+      ArrayInitialize(ExtCHVColorBuffer,0);
+      ArrayInitialize(ExtHLBuffer,0.0);
+      ArrayInitialize(ExtSHLBuffer,0.0);
+     
+      // [Bug Fix] 객체 상태 초기화 (Stateful Object Reset)
+      // iStdDev3 객체가 내부적으로 이전 계산 상태(누적값 등)를 가지고 있을 수 있으므로
+      // 전체 재계산 시 객체를 새로 생성하여 상태를 리셋해야 합니다.
+      if(CheckPointer(iStdDev3) == POINTER_DYNAMIC) delete iStdDev3;
+      
+      iStdDev3 = new HiStdDev3(ExtStdDevPeriod);
+      if(CheckPointer(iStdDev3) == POINTER_INVALID) Print("OnCalculate: HiStdDev3 재생성 실패");
+     }
    else pos=prev_calculated-1;
       
 //--- fill H-L(i) buffer

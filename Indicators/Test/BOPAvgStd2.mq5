@@ -121,6 +121,31 @@ int OnCalculate(const int rates_total,
    double standardDeviationL = 0;
 
 //---
+   // [Bug Fix] 전체 재계산 시 버퍼 초기화 및 객체 재생성
+   if(prev_calculated > rates_total || prev_calculated <= 0)
+     {
+      // [Bug Fix] 전체 재계산 시 버퍼 초기화 필수
+      // 초기화하지 않으면 이전 쓰레기 값이 남아 누적 연산이 폭발함
+      ArrayInitialize(BOP,0.0);
+      ArrayInitialize(BOPAvg,0.0);
+      ArrayInitialize(Diff,0.0);
+      ArrayInitialize(DiffC,0);
+      ArrayInitialize(Up3,0.0);
+      ArrayInitialize(Up2,0.0);
+      ArrayInitialize(Up1,0.0);
+      ArrayInitialize(Down1,0.0);
+      ArrayInitialize(Down2,0.0);
+      ArrayInitialize(Down3,0.0);
+     
+      // [Bug Fix] 객체 상태 초기화 (Stateful Object Reset)
+      // stdDev3 객체가 내부적으로 이전 계산 상태(누적값 등)를 가지고 있을 수 있으므로
+      // 전체 재계산 시 객체를 새로 생성하여 상태를 리셋해야 합니다.
+      if(CheckPointer(stdDev3) == POINTER_DYNAMIC) delete stdDev3;
+      
+      stdDev3 = new HiStdDev3(inpStdPeriod);
+      if(CheckPointer(stdDev3) == POINTER_INVALID) Print("OnCalculate: HiStdDev3 재생성 실패");
+     }
+   
    int i=(int)MathMax(prev_calculated-1,0); for(; i<rates_total && !_StopFlag; i++)
    {
       double HighLowRange=high[i]-low[i];
