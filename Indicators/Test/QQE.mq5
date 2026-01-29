@@ -98,6 +98,16 @@ int OnCalculate(const int rates_total,
    if(copy_count <= 0)
       return(0);
 
+   // [Bug Fix] 전체 재계산 시 버퍼 초기화
+   if(prev_calculated > rates_total || prev_calculated <= 0)
+     {
+      ArrayInitialize(RsiMaBuffer,0.0);
+      ArrayInitialize(AtrRsiBuffer,0.0);
+      ArrayInitialize(MaAtrRsiBuffer,0.0);
+      ArrayInitialize(DarBuffer,0.0);
+      ArrayInitialize(TrLevelSlowBuffer,0.0);
+     }
+
    // 2. 루프 범위 설정
    int start = prev_calculated - 1;
    if(start < 0)

@@ -116,20 +116,32 @@ void OnInit()
  
    _lwma.init((LwmaPeriod > 1) ? LwmaPeriod : 2);
 
-   switch(_Digits)
+   // [Code Improvement] 포인트 계산 로직을 모든 상품에 범용적으로 적용 가능하도록 개선
+   // 상품의 종류(Forex, CFD 등)와 최소 가격 단위(_Point)를 직접 참조하여 ToPoint를 동적으로 계산합니다.
+   // 이를 통해 "XAUUSD"와 같은 특정 심볼 이름을 하드코딩할 필요가 없어지며, 다른 CFD 상품에도 자동 대응됩니다.
+   
+   // 1. 상품의 최소 가격 변동폭(_Point)이 유효한지 확인합니다.
+   if(_Point > 0)
      {
-      case 2: 
-       ToPoint=MathPow(10., 3); break; 
-      case 3: 
-       ToPoint=MathPow(10., 3); break; 
-      case 4: 
-       ToPoint=MathPow(10., 5); break; 
-      case 5: 
-       ToPoint=MathPow(10., 5); break; 
-     }   
-   string GoldSymbol = "XAUUSD";
-   string thisSymbol = StringSubstr(_Symbol, 0, 6);
-   if(thisSymbol == GoldSymbol) ToPoint = 100.;
+       // 2. 기본적으로 ToPoint를 (1.0 / _Point)로 설정합니다.
+       //    이것만으로 대부분의 CFD, 주식, 지수(XAUUSD, US30 등)는 최소 가격 변동이 '1'로 정규화됩니다.
+       //    예: XAUUSD의 _Point가 0.01이면, ToPoint는 1/0.01 = 100이 됩니다.
+       ToPoint = 1.0 / _Point;
+
+       // 3. 만약 상품이 Forex일 경우에만, 4자리/2자리 브로커와의 호환성을 위해 스케일을 보정합니다.
+       ENUM_SYMBOL_CALC_MODE calcMode = (ENUM_SYMBOL_CALC_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE);
+       if (calcMode == SYMBOL_TRADE_CALC_MODE_FOREX && _Digits % 2 == 0)
+       {
+           // _Digits가 짝수(2, 4)인 경우 10을 추가로 곱해 1핍(pip)의 가치를 '10'으로 통일합니다.
+           ToPoint *= 10.0;
+       }
+   }
+   else
+   {
+       // 4. _Point가 0인 비정상적인 경우에 대한 방어 코드
+       ToPoint = 1.0;
+       Print("Warning: Symbol ", _Symbol, " has a point size of 0. ToPoint set to 1.");
+   }
 
    iStdDev1 = new HiStdDev1((StdPeriodL > 1) ? StdPeriodL : 2);
    if(CheckPointer(iStdDev1) == POINTER_INVALID)   Print("HiStdDev1 객체 생성 실패!");

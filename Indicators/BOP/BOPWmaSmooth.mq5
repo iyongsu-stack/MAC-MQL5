@@ -67,6 +67,18 @@ int OnCalculate(const int rates_total,
           BullsRewardBasedOnClose, BearsRewardBasedOnClose, BullsRewardBasedOnOpenClose, BearsRewardBasedOnOpenClose,
           HighLowRange;
    
+   // [Bug Fix] 전체 재계산 시 버퍼 초기화
+   if(prev_calculated > rates_total || prev_calculated <= 0)
+     {
+      ArrayInitialize(SumBulls,0.0);
+      ArrayInitialize(SumBears,0.0);
+      ArrayInitialize(WmaBulls,0.0);
+      ArrayInitialize(WmaBears,0.0);
+      ArrayInitialize(BOP,0.0);
+      ArrayInitialize(SmoothBOP,0.0);
+      ArrayInitialize(SmoothBOPC,0.0);
+     }
+   
    int i=(int)MathMax(prev_calculated-1,0); for(; i<rates_total && !_StopFlag; i++)
      {
       HighLowRange=high[i]-low[i];

@@ -54,16 +54,18 @@ void OnInit()
    string short_name = "BSPSmoothWma("+ (string)inpSmoothPeriod +", "+ (string)inpWmaPeriod + ")";      
    IndicatorSetString(INDICATOR_SHORTNAME,short_name);
  
-   switch(_Digits)
+   // [Code Improvement] 포인트 계산 로직을 모든 상품에 범용적으로 적용 가능하도록 개선
+   if(_Point > 0)
      {
-      case 2: 
-       ToPoint=MathPow(10., 3); break; 
-      case 3: 
-       ToPoint=MathPow(10., 3); break; 
-      case 4: 
-       ToPoint=MathPow(10., 5); break; 
-      case 5: 
-       ToPoint=MathPow(10., 5); break; 
+       ToPoint = 1.0 / _Point;
+       ENUM_SYMBOL_CALC_MODE calcMode = (ENUM_SYMBOL_CALC_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE);
+       if (calcMode == SYMBOL_TRADE_CALC_MODE_FOREX && _Digits % 2 == 0)
+           ToPoint *= 10.0;
+     }
+   else
+     {
+       ToPoint = 1.0;
+       Print("Warning: Symbol ", _Symbol, " has a point size of 0. ToPoint set to 1.");
      }
      
   }  
@@ -87,6 +89,18 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
   {
 
    double mVolume; 
+
+   // [Bug Fix] 전체 재계산 시 버퍼 초기화
+   if(prev_calculated > rates_total || prev_calculated <= 0)
+     {
+      ArrayInitialize(SumBuyRatio,0.0);
+      ArrayInitialize(SumSellRatio,0.0);
+      ArrayInitialize(SmoothBuyRatio,0.0);
+      ArrayInitialize(SmoothSellRatio,0.0);
+      ArrayInitialize(DiffRatio,0.0);
+      ArrayInitialize(WmaDiffRatio,0.0);
+      ArrayInitialize(WmaDiffRatioC1,0);
+     }
 
 //---- The main loop of the indicator calculation
 

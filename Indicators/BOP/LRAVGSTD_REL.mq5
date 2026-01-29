@@ -107,17 +107,19 @@ void OnInit()
  
    _lwma.init(LwmaPeriod);
 
-   switch(_Digits)
+   // [Code Improvement] 포인트 계산 로직을 모든 상품에 범용적으로 적용 가능하도록 개선
+   if(_Point > 0)
      {
-      case 2: 
-       ToPoint=MathPow(10., 3); break; 
-      case 3: 
-       ToPoint=MathPow(10., 3); break; 
-      case 4: 
-       ToPoint=MathPow(10., 5); break; 
-      case 5: 
-       ToPoint=MathPow(10., 5); break; 
-     }   
+       ToPoint = 1.0 / _Point;
+       ENUM_SYMBOL_CALC_MODE calcMode = (ENUM_SYMBOL_CALC_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE);
+       if (calcMode == SYMBOL_TRADE_CALC_MODE_FOREX && _Digits % 2 == 0)
+           ToPoint *= 10.0;
+     }
+   else
+     {
+       ToPoint = 1.0;
+       Print("Warning: Symbol ", _Symbol, " has a point size of 0. ToPoint set to 1.");
+     }
      
 //----
   }
@@ -151,6 +153,19 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
       third  = first + AvgPeriod;
       fourth = third + StdPeriodL;
       fifth = third + StdPeriodS;
+      // [Bug Fix] 전체 재계산 시 버퍼 초기화
+      ArrayInitialize(DiffPressure,0.0);
+      ArrayInitialize(LWMAVal,0.0);
+      ArrayInitialize(avgValLR,0.0);
+      ArrayInitialize(stdS,0.0);
+      ArrayInitialize(stdSC,0);
+      ArrayInitialize(up1StdAvgValLR,0.0);
+      ArrayInitialize(up2StdAvgValLR,0.0);
+      ArrayInitialize(up3StdAvgValLR,0.0);
+      ArrayInitialize(down1StdAvgValLR,0.0);
+      ArrayInitialize(down2StdAvgValLR,0.0);
+      ArrayInitialize(down3StdAvgValLR,0.0);
+      _lwma.init((LwmaPeriod > 1) ? LwmaPeriod : 2);
      }
    else
      { 

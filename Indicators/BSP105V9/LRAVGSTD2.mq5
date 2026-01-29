@@ -116,20 +116,20 @@ void OnInit()
  
    _lwma.init((LwmaPeriod > 1) ? LwmaPeriod : 2);
 
-   switch(_Digits)
+   // [Code Improvement] 포인트 계산 로직을 모든 상품에 범용적으로 적용 가능하도록 개선
+   // 상품의 종류(Forex, CFD 등)와 최소 가격 단위(_Point)를 직접 참조하여 ToPoint를 동적으로 계산합니다.
+   if(_Point > 0)
      {
-      case 2: 
-       ToPoint=MathPow(10., 3); break; 
-      case 3: 
-       ToPoint=MathPow(10., 3); break; 
-      case 4: 
-       ToPoint=MathPow(10., 5); break; 
-      case 5: 
-       ToPoint=MathPow(10., 5); break; 
-     }   
-   string GoldSymbol = "XAUUSD";
-   string thisSymbol = StringSubstr(_Symbol, 0, 6);
-   if(thisSymbol == GoldSymbol) ToPoint = 100.;
+       ToPoint = 1.0 / _Point;
+       ENUM_SYMBOL_CALC_MODE calcMode = (ENUM_SYMBOL_CALC_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE);
+       if (calcMode == SYMBOL_TRADE_CALC_MODE_FOREX && _Digits % 2 == 0)
+           ToPoint *= 10.0;
+     }
+   else
+     {
+       ToPoint = 1.0;
+       Print("Warning: Symbol ", _Symbol, " has a point size of 0. ToPoint set to 1.");
+     }
 
    iStdDev1 = new HiStdDev1(StdPeriodL);
    if(CheckPointer(iStdDev1) == POINTER_INVALID)   Print("HiStdDev1 객체 생성 실패!");

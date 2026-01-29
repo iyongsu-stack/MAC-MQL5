@@ -48,6 +48,11 @@
 #property indicator_width7  1
 #property indicator_width8  1
 
+#include <mySmoothingAlgorithm.mqh>
+#include <myBSPCalculation.mqh>
+
+HiStdDev3 stdDev3;
+
 
 input int                 WmaBSP        = 30;            // WmaBSP
 input int                 StdPeriodL    = 5000;        // StdPeriodL
@@ -55,8 +60,6 @@ input int                 StdPeriodL    = 5000;        // StdPeriodL
 input double              MultiFactorL1  = 1.0;         // StdMultiFactorL1
 input double              MultiFactorL2  = 2.0;         // StdMultiFactorL2
 input double              MultiFactorL3  = 3.0;         // StdMultiFactorL3
-input double              BSPCutOff      = 7.0;         // MaxBspCutOff
-
 
 ENUM_APPLIED_VOLUME  VolumeType     = VOLUME_TICK;    // Volume
 
@@ -97,25 +100,31 @@ void OnInit()
      
 
    string short_name = "BSPstd("+ (string)WmaBSP + ", "  + (string)StdPeriodL + ", " +(string)MultiFactorL1 + ", " 
-                                +(string)MultiFactorL2 +", " +(string)MultiFactorL3 +", " + (string)BSPCutOff +  ")";      
+                                +(string)MultiFactorL2 +", " +(string)MultiFactorL3 +  ")";      
    IndicatorSetString(INDICATOR_SHORTNAME,short_name);
     
 //----
 
-  switch(_Digits)
+  // [Code Improvement] 포인트 계산 로직을 모든 상품에 범용적으로 적용 가능하도록 개선
+  if(_Point > 0)
     {
-      case 2: 
-       ToPoint=MathPow(10., 3); break; 
-      case 3: 
-       ToPoint=MathPow(10., 3); break; 
-      case 4: 
-       ToPoint=MathPow(10., 5); break; 
-      case 5: 
-       ToPoint=MathPow(10., 5); break; 
+      ToPoint = 1.0 / _Point;
+      ENUM_SYMBOL_CALC_MODE calcMode = (ENUM_SYMBOL_CALC_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE);
+      if (calcMode == SYMBOL_TRADE_CALC_MODE_FOREX && _Digits % 2 == 0)
+          ToPoint *= 10.0;
+    }
+  else
+    {
+      ToPoint = 1.0;
+      Print("Warning: Symbol ", _Symbol, " has a point size of 0. ToPoint set to 1.");
     }
   }
   
-  
+  void OnDeinit(const int reason)
+  {
+     if(CheckPointer(stdDev3) == POINTER_DYNAMIC)
+        delete stdDev3;
+  }
   
 //+------------------------------------------------------------------+
 //| Custom indicator iteration function                              |
@@ -144,6 +153,21 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
       first=2;  
       second = first + WmaBSP;
       third = first + StdPeriodL;
+      // [Bug Fix] 전체 재계산 시 버퍼 초기화
+      ArrayInitialize(DiffPressure,0.0);
+      ArrayInitialize(StdS,0.0);
+      ArrayInitialize(up1StdL,0.0);
+      ArrayInitialize(up2StdL,0.0);
+      ArrayInitialize(up3StdL,0.0);
+      ArrayInitialize(Down1StdL,0.0);
+      ArrayInitialize(Down2StdL,0.0);
+      ArrayInitialize(Down3StdL,0.0);
+      ArrayInitialize(DiffBSP,0.0);
+      ArrayInitialize(DiffBSPC,0);
+
+      if(CheckPointer(stdDev3) == POINTER_DYNAMIC) delete stdDev3;
+      stdDev3 = new HiStdDev3(StdPeriodL);
+      if(CheckPointer(stdDev3) == POINTER_INVALID) Print("OnCalculate: HiStdDev3 재생성 실패");
      }
    else
      { 
@@ -161,119 +185,9 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
        else mVolume = (double)volume[bar];
 
 
-       double tempBuyRatio, tempSellRatio, tempTotalPressure ;
-       
-       // tempBuyRatio 계산 - 현재 캔들과 이전 캔들의 상태를 기반으로 계산
-       bool isCurrentBearish = (close[bar] < open[bar]);  // 현재 캔들이 약세(음봉)
-       bool isCurrentBullish = (close[bar] > open[bar]);  // 현재 캔들이 강세(양봉)
-       bool isCurrentDoji = (close[bar] == open[bar]);    // 현재 캔들이 도지(종가==시가)
-       bool isPrevBearish = (close[bar-1] < open[bar-1]); // 이전 캔들이 약세
-       bool isPrevBullish = (close[bar-1] > open[bar-1]); // 이전 캔들이 강세
-       bool isPrevDoji = (close[bar-1] == open[bar-1]);   // 이전 캔들이 도지
-       
-       double highClose = high[bar] - close[bar];  // 상단 여백
-       double closeLow = close[bar] - low[bar];    // 하단 여백
-       double range = high[bar] - low[bar];        // 캔들 범위
-       
-       // tempBuyRatio 계산
-       if (isCurrentBearish)
-       {
-          // 현재 캔들이 약세인 경우
-          if (isPrevBearish)
-             tempBuyRatio = MathMax(high[bar] - close[bar-1], close[bar] - low[bar]);
-          else
-             tempBuyRatio = MathMax(high[bar] - open[bar], close[bar] - low[bar]);
-       }
-       else if (isCurrentBullish)
-       {
-          // 현재 캔들이 강세인 경우
-          if (isPrevBullish)
-             tempBuyRatio = range;
-          else
-             tempBuyRatio = MathMax(open[bar] - close[bar-1], range);
-       }
-       else // isCurrentDoji
-       {
-          // 현재 캔들이 도지인 경우
-          if (highClose > closeLow)
-          {
-             // 상단 여백이 하단 여백보다 큰 경우
-             if (isPrevBearish)
-                tempBuyRatio = MathMax(high[bar] - close[bar-1], close[bar] - low[bar]);
-             else
-                tempBuyRatio = high[bar] - open[bar];
-          }
-          else if (highClose < closeLow)
-          {
-             // 하단 여백이 상단 여백보다 큰 경우
-             if (isPrevBullish)
-                tempBuyRatio = range;
-             else
-                tempBuyRatio = MathMax(open[bar] - close[bar-1], range);
-          }
-          else // highClose == closeLow
-          {
-             // 상단 여백과 하단 여백이 같은 경우
-             if (isPrevBullish)
-                tempBuyRatio = MathMax(high[bar] - open[bar], close[bar] - low[bar]);
-             else if (isPrevBearish)
-                tempBuyRatio = MathMax(open[bar] - close[bar-1], range);
-             else // isPrevDoji
-                tempBuyRatio = range;
-          }
-       }
-       
-       // tempSellRatio 계산
-       if (isCurrentBearish)
-       {
-          // 현재 캔들이 약세인 경우
-          if (isPrevBullish)
-             tempSellRatio = MathMax(close[bar-1] - open[bar], range);
-          else
-             tempSellRatio = range;
-       }
-       else if (isCurrentBullish)
-       {
-          // 현재 캔들이 강세인 경우
-          if (isPrevBullish)
-             tempSellRatio = MathMax(close[bar-1] - low[bar], high[bar] - close[bar]);
-          else
-             tempSellRatio = MathMax(open[bar] - low[bar], high[bar] - close[bar]);
-       }
-       else // isCurrentDoji
-       {
-          // 현재 캔들이 도지인 경우
-          if (highClose > closeLow)
-          {
-             // 상단 여백이 하단 여백보다 큰 경우
-             if (isPrevBullish)
-                tempSellRatio = MathMax(close[bar-1] - open[bar], range);
-             else
-                tempSellRatio = range;
-          }
-          else if (highClose < closeLow)
-          {
-             // 하단 여백이 상단 여백보다 큰 경우
-             if (isPrevBullish)
-                tempSellRatio = MathMax(close[bar-1] - low[bar], high[bar] - close[bar]);
-             else
-                tempSellRatio = open[bar] - low[bar];
-          }
-          else // highClose == closeLow
-          {
-             // 상단 여백과 하단 여백이 같은 경우
-             if (isPrevBullish)
-                tempSellRatio = MathMax(close[bar-1] - open[bar], range);
-             else if (isPrevBearish)
-                tempSellRatio = MathMax(open[bar] - low[bar], high[bar] - close[bar]);
-             else // isPrevDoji
-                tempSellRatio = range;
-          }
-       }
-
-       tempTotalPressure=1.;
-       tempBuyRatio = tempBuyRatio/tempTotalPressure;
-       tempSellRatio = tempSellRatio/tempTotalPressure;
+       double tempBuyRatio = CalculateBuyRatio(open, high, low, close, bar);
+       double tempSellRatio = CalculateSellRatio(open, high, low, close, bar);
+  
        
        DiffPressure[bar] =( MathAbs(tempBuyRatio) + MathAbs(tempSellRatio) ) * ToPoint;
 
@@ -286,14 +200,8 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
 
        if(bar>=third && MnewBar)
         {
-         standardDeviation = StdDev(bar, StdPeriodL, DiffPressure);
+         standardDeviation = stdDev3.Calculate(bar, DiffPressure[bar]);
       
-         if(DiffPressure[bar] > standardDeviation*BSPCutOff) 
-          {
-            DiffPressure[bar] = standardDeviation*BSPCutOff; 
-            standardDeviation = StdDev(bar, StdPeriodL, DiffPressure);
-          }         
-
          up1StdL[bar] = standardDeviation * MultiFactorL1;      
          up2StdL[bar] = standardDeviation * MultiFactorL2;     
          up3StdL[bar] = standardDeviation * MultiFactorL3;

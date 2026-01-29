@@ -134,6 +134,8 @@ int OnCalculate(
    if(prev_calculated>rates_total || prev_calculated<=0)// checking for the first start of calculation of an indicator
      {
       limit=rates_total-min_rates_total-1; // starting index for calculation of all bars
+      // [Bug Fix] 전체 재계산 시 버퍼 초기화
+      ArrayInitialize(ExtMapBuffer,EMPTY_VALUE);
      }
    else
      {
