@@ -198,7 +198,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
 
        if(bar>=second)   StdS[bar] = iWma(bar, WmaBSP, DiffPressure);
 
-       if(bar>=third && MnewBar)
+       if(bar>=third)
         {
          standardDeviation = stdDev3.Calculate(bar, DiffPressure[bar]);
       

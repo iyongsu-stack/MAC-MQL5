@@ -110,3 +110,29 @@ double CalculateSellRatio(const double &open[], const double &high[], const doub
    
    return(sellRatio);
 }
+
+//+------------------------------------------------------------------+
+//| Calculate Bulls Reward                                           |
+//+------------------------------------------------------------------+
+double CalculateBullsReward(const double &open[], const double &high[], const double &low[], const double &close[], int i)
+{
+    double HighLowRange = high[i] - low[i];
+    double BullsRewardBasedOnOpen =(HighLowRange != 0) ? (high[i] - open[i]) / HighLowRange : 0;
+    double BullsRewardBasedOnClose =(HighLowRange != 0) ? (close[i] - low[i]) / HighLowRange : 0;
+    double BullsRewardBasedOnOpenClose =(HighLowRange != 0) ? (close[i] > open[i]) ? (close[i] - open[i]) / HighLowRange : 0 : 0;
+    double BullsRewardDaily =(BullsRewardBasedOnOpen + BullsRewardBasedOnClose +BullsRewardBasedOnOpenClose) /3;
+    return(BullsRewardDaily);
+}  
+
+//+------------------------------------------------------------------+
+//| Calculate Bears Reward                                           |
+//+------------------------------------------------------------------+
+double CalculateBearsReward(const double &open[], const double &high[], const double &low[], const double &close[], int i)
+{
+    double HighLowRange = high[i] - low[i];
+    double BearsRewardBasedOnOpen =(HighLowRange != 0) ? (open[i] - low[i]) / HighLowRange : 0;
+    double BearsRewardBasedOnClose =(HighLowRange != 0) ? (high[i] - close[i]) / HighLowRange : 0;
+    double BearsRewardBasedOnOpenClose =(HighLowRange != 0) ? (close[i] < open[i]) ? (open[i] - close[i]) / HighLowRange : 0 : 0;
+    double BearsRewardDaily =(BearsRewardBasedOnOpen + BearsRewardBasedOnClose +BearsRewardBasedOnOpenClose) /3;
+    return(BearsRewardDaily);
+}  

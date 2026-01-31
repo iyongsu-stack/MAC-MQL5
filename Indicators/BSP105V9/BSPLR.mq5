@@ -158,7 +158,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
           LRPressure[bar] = LinearRegression(bar, LRPeriod, DiffPressure);  
        }  
 
-       if((bar>=third) && MnewBar)
+       if(bar>=third)
        {
           standardDeviation = StdDev3((bar-1), StdPeriod, LRPressure);
 

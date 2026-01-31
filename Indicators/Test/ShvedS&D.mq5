@@ -279,7 +279,7 @@ void SlowFractals(const double &High[], const double &Low[])
 
 void FindZones(const double &High[], const double &Low[], const double &Close[])
 {
-   int i,j,shift,bustcount=0,testcount=0;
+   int i,shift,bustcount=0,testcount=0;
    double hival,loval;
    bool turned=false,hasturned=false;
    

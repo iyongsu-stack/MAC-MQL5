@@ -117,7 +117,7 @@ int OnCalculate(const int rates_total,
                 const int &spread[])
   {
    if(Bars(_Symbol,_Period)<rates_total) return(-1);
-   bool NewBarFlag=isNewBar(_Symbol);
+   // bool NewBarFlag=isNewBar(_Symbol); // Removed unused check
    double standardDeviationL = 0;
 
 //---
@@ -164,16 +164,13 @@ int OnCalculate(const int rates_total,
       DiffC[i] = (i>0) ? (Diff[i]>Diff[i-1]) ? 0 : (Diff[i]<Diff[i-1]) ? 1 : Diff[i-1] : 0;  
 
 
-      if(NewBarFlag)
-      {
-         standardDeviationL = stdDev3.Calculate(i, Diff[i]);
-         Up3[i] = standardDeviationL * inpStdMulti3;
-         Up2[i] = standardDeviationL * inpStdMulti2;
-         Up1[i] = standardDeviationL * inpStdMulti1;
-         Down1[i] = -standardDeviationL * inpStdMulti1;
-         Down2[i] = -standardDeviationL * inpStdMulti2;
-         Down3[i] = -standardDeviationL * inpStdMulti3;
-      }
+      standardDeviationL = stdDev3.Calculate(i, Diff[i]);
+      Up3[i] = standardDeviationL * inpStdMulti3;
+      Up2[i] = standardDeviationL * inpStdMulti2;
+      Up1[i] = standardDeviationL * inpStdMulti1;
+      Down1[i] = -standardDeviationL * inpStdMulti1;
+      Down2[i] = -standardDeviationL * inpStdMulti2;
+      Down3[i] = -standardDeviationL * inpStdMulti3;
    }
 
    return(i);

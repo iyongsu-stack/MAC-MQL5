@@ -239,7 +239,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
           avgValLR[bar]= iAverage(bar, AvgPeriod, LWMAVal);
        }
        
-       if((bar>=fourth) && MnewBar)
+       if(bar>=fourth)
        {
           standardDeviationL = StdDev((bar-1), StdPeriodL, avgValLR, LWMAVal);
 

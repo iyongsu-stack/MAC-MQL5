@@ -18,9 +18,11 @@
 #property indicator_style1  STYLE_SOLID
 #property indicator_width1  2
 
+#include <mySmoothingAlgorithm.mqh>
+#include <myBSPCalculation.mqh>
 
 //-------------------
-input int           inpWmaPeriod = 90;       //inpWmaPeriod
+input int           inpWmaPeriod = 10;       //inpWmaPeriod
 
 double  SumBulls[], SumBears[], WmaBulls[], WmaBears[], BOP[],BOPC[];
 
@@ -58,11 +60,6 @@ int OnCalculate(const int rates_total,
                 const long &volume[],
                 const int &spread[])
   {
-//   if(Bars(_Symbol,_Period)<rates_total) return(-1);
-
-   double BullsRewardDaily, BearsRewardDaily, BullsRewardBasedOnOpen, BearsRewardBasedOnOpen, 
-          BullsRewardBasedOnClose, BearsRewardBasedOnClose, BullsRewardBasedOnOpenClose, BearsRewardBasedOnOpenClose,
-          HighLowRange;
    
    // [Bug Fix] 전체 재계산 시 버퍼 초기화
    if(prev_calculated > rates_total || prev_calculated <= 0)
@@ -77,15 +74,8 @@ int OnCalculate(const int rates_total,
    
    int i=(int)MathMax(prev_calculated-1,0); for(; i<rates_total && !_StopFlag; i++)
      {
-      HighLowRange=high[i]-low[i];
-      BullsRewardBasedOnOpen      = (HighLowRange!=0) ? (high[i] - open[i])/HighLowRange : 0;
-      BearsRewardBasedOnOpen      = (HighLowRange!=0) ? (open[i] - low[i])/HighLowRange : 0;
-      BullsRewardBasedOnClose     = (HighLowRange!=0) ? (close[i] - low[i])/HighLowRange : 0;
-      BearsRewardBasedOnClose     = (HighLowRange!=0) ? (high[i] - close[i])/HighLowRange : 0;
-      BullsRewardBasedOnOpenClose = (HighLowRange!=0) ? (close[i]>open[i]) ? (close[i] - open[i])/HighLowRange : 0 : 0;
-      BearsRewardBasedOnOpenClose = (HighLowRange!=0) ? (close[i]<open[i]) ? (open[i] - close[i])/HighLowRange : 0 : 0;
-      BullsRewardDaily            = (BullsRewardBasedOnOpen + BullsRewardBasedOnClose + BullsRewardBasedOnOpenClose) / 3;
-      BearsRewardDaily            = (BearsRewardBasedOnOpen + BearsRewardBasedOnClose + BearsRewardBasedOnOpenClose) / 3;
+      double BullsRewardDaily = CalculateBullsReward(open, high, low, close, i);
+      double BearsRewardDaily = CalculateBearsReward(open, high, low, close, i);
       
       //---
       //SumBulls[i] = SumBulls[i-1] + BullsRewardDaily;
@@ -97,39 +87,8 @@ int OnCalculate(const int rates_total,
       WmaBears[i] = iWma(i,inpWmaPeriod, SumBears);
 
       BOP[i] = WmaBulls[i] - WmaBears[i];
-   //   BOPC[i] = (i>0) ? (BOP[i]>BOP[i-1]) ? 0 : (BOP[i]<BOP[i-1]) ? 1 : 0 : 0;   
       BOPC[i] = (i>0) ? (BOP[i]>BOP[i-1]) ? 0 : (BOP[i]<BOP[i-1]) ? 1 : 0 : 0;   
-}
+     }
    return(i);
   }
-
-  double iWma(int end, int wmaPeriod, const double &S_Array[])
-{
-
-   double Sum = 0., Weight=0., Norm=0., wma=0.;
-   
-   for(int i=0;i<wmaPeriod;i++)
-   { 
-      if(end-i<0) break;    
-      Weight = (wmaPeriod-i)*wmaPeriod;
-      Norm += Weight; 
-      Sum += S_Array[end-i]*Weight;
-   }
-   if(Norm>0) wma = Sum/Norm;
-   else wma = 0.; 
-   
-   return(wma);
-}
-
-
-
-
-
-
-
-
-//+------------------------------------------------------------------+
-//| Custom functions                                                 |
-//+------------------------------------------------------------------+
-
 
