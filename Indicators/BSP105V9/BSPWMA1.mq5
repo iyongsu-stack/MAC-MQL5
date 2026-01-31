@@ -18,15 +18,16 @@
 #property indicator_style1  STYLE_SOLID
 #property indicator_width1  2
 
+#include <mySmoothingAlgorithm.mqh>
+#include <myBSPCalculation.mqh>
 
 ENUM_APPLIED_VOLUME  VolumeType     = VOLUME_TICK;    // Volume
 
 
-input int                 WmaPeriod1   = 1;          // wmaPeriod1
+input int                 WmaPeriod1   = 10;          // wmaPeriod1
 
 
-double DiffPressure[], 
-       DiffPressure1[], DiffPressureC1[];
+double DiffPressure[], DiffPressure1[], DiffPressureC1[];
 
 double ToPoint;       
 
@@ -51,7 +52,8 @@ void OnInit()
      {
        ToPoint = 1.0 / _Point;
        ENUM_SYMBOL_CALC_MODE calcMode = (ENUM_SYMBOL_CALC_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE);
-       if (calcMode == SYMBOL_TRADE_CALC_MODE_FOREX && _Digits % 2 == 0)
+       bool isGold = (StringFind(_Symbol, "XAU") != -1) || (StringFind(_Symbol, "GOLD") != -1);
+       if (calcMode == SYMBOL_CALC_MODE_FOREX && _Digits % 2 == 0 && !isGold)
            ToPoint *= 10.0;
      }
    else
@@ -82,13 +84,12 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
                 const int &spread[])
   {
 
-   int start, first;
+   int start;
    double mVolume;
    
    if(prev_calculated>rates_total || prev_calculated<=0) // checking for the first start of calculation of an indicator
      {
       start=2; 
-      first = start + WmaPeriod1; 
       // [Bug Fix] 전체 재계산 시 버퍼 초기화
       ArrayInitialize(DiffPressure,0.0);
       ArrayInitialize(DiffPressure1,0.0);
@@ -97,7 +98,6 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    else
      { 
       start=prev_calculated-1;
-      first = start;
      } 
 
 
@@ -108,92 +108,17 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
        if(VolumeType == VOLUME_TICK) mVolume = (double)tick_volume[bar];
        else mVolume = (double)volume[bar];
 
+      double tempBuyRatio = CalculateBuyRatio(open, high, low, close, bar);
+      double tempSellRatio = CalculateSellRatio(open, high, low, close, bar);
+      double tempDiffPressure = (MathAbs(tempBuyRatio) - MathAbs(tempSellRatio))*ToPoint;    
 
-       double tempBuyRatio, tempSellRatio, tempTotalPressure, tempDiffPressure ;
+      DiffPressure[bar] = DiffPressure[bar-1] + tempDiffPressure;
 
-       tempBuyRatio = close[bar]<open[bar] ?       (close[bar-1]<open[bar] ?               MathMax(high[bar]-close[bar-1], close[bar]-low[bar]) :
-                               /* close[1]>=open */             MathMax(high[bar]-open[bar], close[bar]-low[bar])) : 
-             (close[bar]>open[bar] ?       (close[bar-1]>open[bar] ?               high[bar]-low[bar] : 
-                               /* close[1]>=open */             MathMax(open[bar]-close[bar-1], high[bar]-low[bar])) :           
-             /*close == open*/   (high[bar]-close[bar]>close[bar]-low[bar] ?       
-                                                               (close[bar-1]<open[bar] ?              MathMax(high[bar]-close[bar-1],close[bar]-low[bar]) : 
-                                                               /*close[1]>=open */           high[bar]-open[bar]) : 
-                                 (high[bar]-close[bar]<close[bar]-low[bar] ? 
-                                                               (close[bar-1]>open[bar] ?              high[bar]-low[bar] : 
-                                                                                             MathMax(open[bar]-close[bar-1], high[bar]-low[bar])) : 
-                               /* high-close<=close-low */                             
-                                                               (close[bar-1]>open[bar] ?              MathMax(high[bar]-open[bar], close[bar]-low[bar]) : 
-                                                               (close[bar-1]<open[bar] ?              MathMax(open[bar]-close[bar-1], high[bar]-low[bar]) : 
-                                                               /* close[1]==open */          high[bar]-low[bar])))))  ;  
-                 
-         tempSellRatio = close[bar]<open[bar] ?       (close[bar-1]>open[bar] ?              MathMax(close[bar-1]-open[bar], high[bar]-low[bar]):
-                                                               high[bar]-low[bar]) : 
-              (close[bar]>open[bar] ?      (close[bar-1]>open[bar] ?              MathMax(close[bar-1]-low[bar], high[bar]-close[bar]) :
-                                                               MathMax(open[bar]-low[bar], high[bar]-close[bar])) : 
-              /*close == open*/  (high[bar]-close[bar]>close[bar]-low[bar] ?   
-                                                               (close[bar-1]>open[bar] ?               MathMax(close[bar-1]-open[bar], high[bar]-low[bar]) : 
-                                                                                              high[bar]-low[bar]) : 
-                                 (high[bar]-close[bar]<close[bar]-low[bar] ?      
-                                                               (close[bar-1]>open[bar] ?               MathMax(close[bar-1]-low[bar], high[bar]-close[bar]) : 
-                                                                                              open[bar]-low[bar]) : 
-                                 /* high-close<=close-low */                              
-                                                               (close[bar-1]>open[bar] ?               MathMax(close[bar-1]-open[bar], high[bar]-low[bar]) : 
-                                                               (close[bar-1]<open[bar] ?               MathMax(open[bar]-low[bar], high[bar]-close[bar]) : 
-                                                                                              high[bar]-low[bar])))))   ;
-       
-
-
-       tempTotalPressure=1.;
-       tempBuyRatio = tempBuyRatio/tempTotalPressure;
-       tempSellRatio = tempSellRatio/tempTotalPressure;
-       tempDiffPressure = (MathAbs(tempBuyRatio) - MathAbs(tempSellRatio))*ToPoint;
-
-       DiffPressure[bar] = DiffPressure[bar-1] + tempDiffPressure;
-     }
-     
-     
-   for(int bar=first; bar<rates_total; bar++)
-     {
-            
-       DiffPressure1[bar] = iWma(bar, WmaPeriod1, DiffPressure);
-
-       DiffPressureC1[bar] = (bar>0) ? (DiffPressure1[bar]>=DiffPressure1[bar-1]) ? 0 : 
+      DiffPressure1[bar] = iWma(bar, WmaPeriod1, DiffPressure);
+      DiffPressureC1[bar] = (bar>0) ? (DiffPressure1[bar]>=DiffPressure1[bar-1]) ? 0 : 
                                           (DiffPressure1[bar]<DiffPressure1[bar-1]) ? 1 : DiffPressure1[bar-1] : 0;
-     } 
 
+    }
    return(rates_total);
   }
 //+----------------------
-
-
-double Average(int end, int avgPeriod, const double &S_Array[])
-{
-    double sum;
-    sum=0.0;
-      
-    for(int i=end+1-avgPeriod;i<=end;i++)
-    {
-          sum+=S_Array[i];
-    }
-       
-    return(sum/avgPeriod);
-
-}
-
-
-double iWma(int end, int wmaPeriod, const double &S_Array[])
-{
-
-   double Sum = 0., Weight=0., Norm=0., wma=0.;
-   
-   for(int i=0;i<wmaPeriod;i++)
-   { 
-      Weight = (wmaPeriod-i)*wmaPeriod;
-      Norm += Weight; 
-      Sum += S_Array[end-i]*Weight;
-   }
-   if(Norm>0) wma = Sum/Norm;
-   else wma = 0; 
-   
-   return(wma);
-}

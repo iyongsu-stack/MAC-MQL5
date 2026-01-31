@@ -145,6 +145,7 @@ double LinearRegression(int end, int period, const double &close[])
        X=0;
        for(int i=end+1-period;i<=end;i++)
          {
+          if(i<0) continue;
           sumX+=X;
           sumY+=close[i];
           sumXY+=X*close[i];
@@ -317,6 +318,7 @@ double iWma(int end, int wmaPeriod, const double &S_Array[])
    
    for(int i=0;i<wmaPeriod;i++)
    { 
+      if(end-i<0) continue;
       Weight = (wmaPeriod-i)*wmaPeriod;
       Norm += Weight; 
       Sum += S_Array[end-i]*Weight;

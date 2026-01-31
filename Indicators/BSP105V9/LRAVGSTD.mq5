@@ -130,7 +130,8 @@ void OnInit()
 
        // 3. 만약 상품이 Forex일 경우에만, 4자리/2자리 브로커와의 호환성을 위해 스케일을 보정합니다.
        ENUM_SYMBOL_CALC_MODE calcMode = (ENUM_SYMBOL_CALC_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE);
-       if (calcMode == SYMBOL_TRADE_CALC_MODE_FOREX && _Digits % 2 == 0)
+       bool isGold = (StringFind(_Symbol, "XAU") != -1) || (StringFind(_Symbol, "GOLD") != -1);
+       if (calcMode == SYMBOL_CALC_MODE_FOREX && _Digits % 2 == 0 && !isGold)
        {
            // _Digits가 짝수(2, 4)인 경우 10을 추가로 곱해 1핍(pip)의 가치를 '10'으로 통일합니다.
            ToPoint *= 10.0;

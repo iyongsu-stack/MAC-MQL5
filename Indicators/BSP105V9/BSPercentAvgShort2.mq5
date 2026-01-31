@@ -118,7 +118,8 @@ void OnInit()
     {
       ToPoint = 1.0 / _Point;
       ENUM_SYMBOL_CALC_MODE calcMode = (ENUM_SYMBOL_CALC_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE);
-      if (calcMode == SYMBOL_TRADE_CALC_MODE_FOREX && _Digits % 2 == 0)
+      bool isGold = (StringFind(_Symbol, "XAU") != -1) || (StringFind(_Symbol, "GOLD") != -1);
+      if (calcMode == SYMBOL_TRADE_CALC_MODE_FOREX && _Digits % 2 == 0 && !isGold)
           ToPoint *= 10.0;
     }
   else
