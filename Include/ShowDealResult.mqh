@@ -50,6 +50,7 @@ bool ArrowSellCreate(
 //--- set the priority for receiving the event of a mouse click in the chart 
    ObjectSetInteger(chart_ID,name,OBJPROP_ZORDER,z_order); 
 //--- successful execution 
+   PrintFormat("Sell Create:");
    return(true); 
   } 
   
@@ -100,6 +101,7 @@ bool ArrowBuyCreate(
 //--- set the priority for receiving the event of a mouse click in the chart 
    ObjectSetInteger(chart_ID,name,OBJPROP_ZORDER,z_order); 
 //--- successful execution 
+   PrintFormat("Buy Create:");
    return(true); 
   } 
 
@@ -153,6 +155,8 @@ bool ArrowedLineCreate(
 //--- set the priority for receiving the event of a mouse click in the chart 
    ObjectSetInteger(chart_ID,name,OBJPROP_ZORDER,z_order); 
 //--- successful execution 
+   PrintFormat("Line Create:");
+
    return(true); 
   } 
   

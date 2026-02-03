@@ -5,6 +5,7 @@
 //| 19.08.2025 - Initial release                                     |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2025, YourName"
+#include <myFunction.mqh>
 #property link      "https://mql5.com"
 #property version   "1.00"
 
@@ -58,6 +59,12 @@ input int                 StdPeriodS    = 1;        // StdPeriodS
 input double              MultiFactorL1  = 1.;         // StdMultiFactorL1
 input double              MultiFactorL2  = 2.0;         // StdMultiFactorL2
 input double              MultiFactorL3  = 3.0;         // StdMultiFactorL3
+
+input group "Time Filter"
+input int StdCalcStartTimeHour = 1;      // Start Calculation (Hour)
+input int StdCalcStartTimeMinute = 30;   // Start Calculation (Minute)
+input int StdCalcEndTimeHour = 23;       // End Calculation (Hour)
+input int StdCalcEndTimeMinute = 30;     // End Calculation (Minute)
 
 input double              MaxBSPMult     = 20.0;         // MaxBSPmultfactor
 
@@ -240,19 +247,38 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
           avgValLR[bar]= iAverage(bar, AvgPeriod, LWMAVal);
        }
        
-       if(bar>=fourth)
-       {
-          standardDeviationL = StdDev((bar-1), StdPeriodL, avgValLR, LWMAVal);
-
-          up1StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL1;
-          down1StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL1;
-
-          up2StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL2;
-          down2StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL2;
-
-          up3StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL3;
-          down3StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL3;
-       }  
+        if(bar>=fourth)
+        {
+           bool isCalcTime = IsStdCalculationTime(time[bar]);
+           if (isCalcTime) {
+               standardDeviationL = StdDev((bar-1), StdPeriodL, avgValLR, LWMAVal);
+    
+               up1StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL1;
+               down1StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL1;
+    
+               up2StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL2;
+               down2StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL2;
+    
+               up3StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL3;
+               down3StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL3;
+           } else {
+               if (bar > 0) {
+                   up1StdAvgValLR[bar] = up1StdAvgValLR[bar-1];
+                   down1StdAvgValLR[bar] = down1StdAvgValLR[bar-1];
+                   up2StdAvgValLR[bar] = up2StdAvgValLR[bar-1];
+                   down2StdAvgValLR[bar] = down2StdAvgValLR[bar-1];
+                   up3StdAvgValLR[bar] = up3StdAvgValLR[bar-1];
+                   down3StdAvgValLR[bar] = down3StdAvgValLR[bar-1];
+               } else {
+                   up1StdAvgValLR[bar] = 0;
+                   down1StdAvgValLR[bar] = 0;
+                   up2StdAvgValLR[bar] = 0;
+                   down2StdAvgValLR[bar] = 0;
+                   up3StdAvgValLR[bar] = 0;
+                   down3StdAvgValLR[bar] = 0;
+               }
+           }
+        }  
        
        if(bar>=fifth)
        {        

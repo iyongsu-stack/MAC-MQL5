@@ -109,11 +109,11 @@ int OnCalculate(const int rates_total,
 
       
 
-         WmaBulls[i] = iWma(i,inpWmaPeriod, SumBulls);
-         WmaBears[i] = iWma(i,inpWmaPeriod, SumBears);
+      WmaBulls[i] = iWma(i,inpWmaPeriod, SumBulls);
+      WmaBears[i] = iWma(i,inpWmaPeriod, SumBears);
 
-         BOP[i] = WmaBulls[i] - WmaBears[i];
-         BOPC[i] = (i>0) ? (BOP[i]>BOP[i-1]) ? 0 : (BOP[i]<BOP[i-1]) ? 1 : 0 : 0;   
+      BOP[i] = WmaBulls[i] - WmaBears[i];
+      BOPC[i] = (i>0) ? (BOP[i]>BOP[i-1]) ? 0 : (BOP[i]<BOP[i-1]) ? 1 : 0 : 0;   
     }
    return(i);
   }

@@ -53,25 +53,34 @@ void OnStart()
   ObjectsDeleteAll(0, -1, -1);
   
   datetime chartStartTime = iTime(Symbol(), PERIOD_CURRENT, iBars(Symbol(), 0)-1 );
-//  PrintFormat( "Bar Number: %d, cahrtStartTime: %s", iBars(Symbol(), 0)-1, TimeToString(chartStartTime) );
+  PrintFormat( "Bar Number: %d, cahrtStartTime: %s", iBars(Symbol(), 0)-1, TimeToString(chartStartTime) );
   
   for(uint i=0; i < CSVFile.RowCount(); i++)
   {
      datetime inDealTime = StringToTime(CSVFile.GetValue(i, "InTime")), outDealTime = StringToTime(CSVFile.GetValue(i, "OutTime"));
-     string dealSymbol= StringSubstr(CSVFile.GetValue(i, "Symbol"), 0, 6);
-     double inDealPrice = StringToDouble(CSVFile.GetValue(i, "InPrice")), outDealPrice = StringToDouble(CSVFile.GetValue(i, "OutPrice"));
+     string dealSymbol = CSVFile.GetValue(i, "Symbol");
+     
+     // 공백이 포함된 가격 문자열 처리 (예: "5 185.10" -> "5185.10")
+     string inPriceStr = CSVFile.GetValue(i, "InPrice");
+     string outPriceStr = CSVFile.GetValue(i, "OutPrice");
+     StringReplace(inPriceStr, " ", "");
+     StringReplace(outPriceStr, " ", "");
+     
+     double inDealPrice = StringToDouble(inPriceStr);
+     double outDealPrice = StringToDouble(outPriceStr);
      string inDealType = CSVFile.GetValue(i, "InType");
 
-     if(  (inDealTime <= chartStartTime) || (outDealTime > TimeCurrent()) ) 
+     if( (inDealTime <= chartStartTime) || (outDealTime > TimeCurrent()) ) 
      {
-         PrintFormat( "Time is Wrong" );
-         continue;
-     } 
+         PrintFormat( "시간 오류 또는 차트 데이터 부족. 진입시간: %s, 차트시작: %s", TimeToString(inDealTime), TimeToString(chartStartTime) );
+         // continue; // 차트 시작 전이라도 일단 그리기 시도 (사용자 요청)
+     }  
 
-     string tempSymbol = Symbol();
-     if(dealSymbol != Symbol() ) 
+     string currentSymbol = Symbol();
+     // 심볼 매칭 완화: 서로 포함 관계인지 확인
+     if (StringFind(currentSymbol, dealSymbol) == -1 && StringFind(dealSymbol, currentSymbol) == -1)
      {
-         PrintFormat( "Symbol is %s", dealSymbol );
+         PrintFormat( "심볼 불일치: CSV=%s, 차트=%s", dealSymbol, currentSymbol );
          continue;
      }    
   
@@ -112,6 +121,9 @@ void OnStart()
      else 
          PrintFormat("[경고] 알 수 없는 거래 타입 (Row %d): Type = %s", i, inDealType );
   }
+  
+  // Force chart update to make objects visible immediately
+  ChartRedraw(0);
 
 /*
   int i = 0;

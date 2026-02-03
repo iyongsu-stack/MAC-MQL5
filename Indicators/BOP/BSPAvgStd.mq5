@@ -46,6 +46,7 @@
 
 #include <myBSPCalculation.mqh>
 #include <mySmoothingAlgorithm.mqh>
+#include <myFunction.mqh>
 
 //-------------------
 input int inpSmoothPeriod = 15;  // Smoothing period
@@ -54,6 +55,12 @@ input int inpStdPeriod = 5000;   // Std period
 input double inpStdMulti1 = 1.0; // Std multiplier1
 input double inpStdMulti2 = 2.0; // Std multiplier2
 input double inpStdMulti3 = 3.0; // Std multiplier3
+
+input group "Time Filter"
+input int StdCalcStartTimeHour = 1;      // Start Calculation (Hour)
+input int StdCalcStartTimeMinute = 30;   // Start Calculation (Minute)
+input int StdCalcEndTimeHour = 23;       // End Calculation (Hour)
+input int StdCalcEndTimeMinute = 30;     // End Calculation (Minute)
 
 double BOP[], BOPAvg[], Diff[], DiffC[], Up3[], Up2[], Up1[], Down1[], Down2[],
     Down3[];
@@ -162,16 +169,35 @@ int OnCalculate(const int rates_total, const int prev_calculated,
                              : (Diff[i] < Diff[i - 1]) ? 1 : Diff[i - 1]
                        : 0;
 
-      standardDeviationL = stdDev3.Calculate(i, Diff[i]);
-      Up3[i] = standardDeviationL * inpStdMulti3;
-      Up2[i] = standardDeviationL * inpStdMulti2;
-
-      Up1[i] = standardDeviationL * inpStdMulti1;
-
-      Down1[i] = -standardDeviationL * inpStdMulti1;
-
-      Down2[i] = -standardDeviationL * inpStdMulti2;
-      Down3[i] = -standardDeviationL * inpStdMulti3;
+      bool isCalcTime = IsStdCalculationTime(time[i]);
+      if (isCalcTime) {
+          standardDeviationL = stdDev3.Calculate(i, Diff[i]);
+          Up3[i] = standardDeviationL * inpStdMulti3;
+          Up2[i] = standardDeviationL * inpStdMulti2;
+    
+          Up1[i] = standardDeviationL * inpStdMulti1;
+    
+          Down1[i] = -standardDeviationL * inpStdMulti1;
+    
+          Down2[i] = -standardDeviationL * inpStdMulti2;
+          Down3[i] = -standardDeviationL * inpStdMulti3;
+      } else {
+         if (i > 0) {
+            Up3[i] = Up3[i-1];
+            Up2[i] = Up2[i-1];
+            Up1[i] = Up1[i-1];
+            Down1[i] = Down1[i-1];
+            Down2[i] = Down2[i-1];
+            Down3[i] = Down3[i-1];
+         } else {
+            Up3[i] = 0.0;
+            Up2[i] = 0.0;
+            Up1[i] = 0.0;
+            Down1[i] = 0.0;
+            Down2[i] = 0.0;
+            Down3[i] = 0.0;
+         }
+      }
   }
 
   return (i);

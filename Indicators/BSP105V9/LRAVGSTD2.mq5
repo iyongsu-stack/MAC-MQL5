@@ -10,6 +10,7 @@
 
 #include <mySmoothingAlgorithm.mqh>
 #include <myBSPCalculation.mqh>
+#include <myFunction.mqh>
 
 #property indicator_separate_window
 
@@ -64,7 +65,11 @@ input double              MultiFactorL3  = 3.0;         // StdMultiFactorL3
 
 input double              MaxBSPMult     = 20.0;         // MaxBSPmultfactor
 
-
+input group "Time Filter"
+input int StdCalcStartTimeHour = 1;      // Start Calculation (Hour)
+input int StdCalcStartTimeMinute = 30;   // Start Calculation (Minute)
+input int StdCalcEndTimeHour = 23;       // End Calculation (Hour)
+input int StdCalcEndTimeMinute = 30;     // End Calculation (Minute)
 
 double DiffPressure[], LWMAVal[],
        avgValLR[], stdS[], stdSC[], 
@@ -118,24 +123,36 @@ void OnInit()
 
    // [Code Improvement] 포인트 계산 로직을 모든 상품에 범용적으로 적용 가능하도록 개선
    // 상품의 종류(Forex, CFD 등)와 최소 가격 단위(_Point)를 직접 참조하여 ToPoint를 동적으로 계산합니다.
+   // 이를 통해 "XAUUSD"와 같은 특정 심볼 이름을 하드코딩할 필요가 없어지며, 다른 CFD 상품에도 자동 대응됩니다.
+   
+   // 1. 상품의 최소 가격 변동폭(_Point)이 유효한지 확인합니다.
    if(_Point > 0)
      {
+       // 2. 기본적으로 ToPoint를 (1.0 / _Point)로 설정합니다.
+       //    이것만으로 대부분의 CFD, 주식, 지수(XAUUSD, US30 등)는 최소 가격 변동이 '1'로 정규화됩니다.
+       //    예: XAUUSD의 _Point가 0.01이면, ToPoint는 1/0.01 = 100이 됩니다.
        ToPoint = 1.0 / _Point;
+
+       // 3. 만약 상품이 Forex일 경우에만, 4자리/2자리 브로커와의 호환성을 위해 스케일을 보정합니다.
        ENUM_SYMBOL_CALC_MODE calcMode = (ENUM_SYMBOL_CALC_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE);
        bool isGold = (StringFind(_Symbol, "XAU") != -1) || (StringFind(_Symbol, "GOLD") != -1);
-       if (calcMode == SYMBOL_TRADE_CALC_MODE_FOREX && _Digits % 2 == 0 && !isGold)
+       if (calcMode == SYMBOL_CALC_MODE_FOREX && _Digits % 2 == 0 && !isGold)
+       {
+           // _Digits가 짝수(2, 4)인 경우 10을 추가로 곱해 1핍(pip)의 가치를 '10'으로 통일합니다.
            ToPoint *= 10.0;
-     }
+       }
+   }
    else
-     {
+   {
+       // 4. _Point가 0인 비정상적인 경우에 대한 방어 코드
        ToPoint = 1.0;
        Print("Warning: Symbol ", _Symbol, " has a point size of 0. ToPoint set to 1.");
-     }
+   }
 
-   iStdDev1 = new HiStdDev1(StdPeriodL);
+   iStdDev1 = new HiStdDev1((StdPeriodL > 1) ? StdPeriodL : 2);
    if(CheckPointer(iStdDev1) == POINTER_INVALID)   Print("HiStdDev1 객체 생성 실패!");
 
-   iStdDev2 = new HiStdDev2(StdPeriodS);
+   iStdDev2 = new HiStdDev2((StdPeriodS > 1) ? StdPeriodS : 2);
    if(CheckPointer(iStdDev2) == POINTER_INVALID)   Print("HiStdDev2 객체 생성 실패!");
 
 //----
@@ -176,7 +193,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    if(rates_total <= min_needed)
       return(0);
 
-   int first, second;
+   int first;
    double mVolume, standardDeviationL;
 
    // 첫 계산(히스토리 채움)에서는 new bar 여부와 무관하게 모두 계산
@@ -185,7 +202,6 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    if(prev_calculated > rates_total || prev_calculated <= 0)
      {
       first = 2;  
-      second = first + avgPeriod;
       
       // [Bug Fix] 전체 재계산 시 버퍼 초기화 필수
       // 초기화하지 않으면 DiffPressure[1]에 이전 쓰레기 값이 남아 누적 연산이 폭발함
@@ -219,12 +235,10 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    else
      { 
       first = prev_calculated - 1; 
-      second = first;
      } 
 
    // 메인 계산 루프
-   for(int bar = first; bar < rates_total; bar++)
-     {
+   for(int bar = first; bar < rates_total; bar++){
       if(VolumeType == VOLUME_TICK) mVolume = (double)tick_volume[bar];
       else mVolume = (double)volume[bar];
 
@@ -236,47 +250,29 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
 
       LWMAVal[bar] = _lwma.calculate(DiffPressure[bar], bar, rates_total);
              
-      if(bar >= second)
-       {
-         avgValLR[bar] = myAverage(bar, AvgPeriod, LWMAVal);
+      avgValLR[bar] = myAverage(bar, AvgPeriod, LWMAVal);
 
-         stdS[bar] = iStdDev2.Calculate(bar, avgValLR[bar], LWMAVal[bar]);  
-         
-         // DRAW_COLOR_LINE의 색상 인덱스는 0..N-1 (여기서는 0=Green, 1=Red)
-         if(bar > 0 && stdS[bar] != EMPTY_VALUE && stdS[bar-1] != EMPTY_VALUE)
-         {
-            if(stdS[bar] > stdS[bar-1])
-               stdSC[bar] = 0;
-            else if(stdS[bar] < stdS[bar-1])
-               stdSC[bar] = 1;
-            else
-               stdSC[bar] = stdSC[bar-1];
-         }
-         else
-            stdSC[bar] = (bar > 0) ? stdSC[bar-1] : 0;
+      stdS[bar] = iStdDev2.Calculate(bar, avgValLR[bar], LWMAVal[bar]);  
+      stdSC[bar] = (bar>0) ? (stdS[bar]>=stdS[bar-1]) ? 0 : (stdS[bar]<stdS[bar-1]) ? 1 : stdS[bar-1] : 0;
 
-         if(MnewBar)
-         {
-           standardDeviationL = iStdDev1.Calculate(bar, avgValLR[bar], LWMAVal[bar]);
-
-           up1StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL1;
-           down1StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL1;
-
-           up2StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL2;
-           down2StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL2;
-
-           up3StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL3;
-           down3StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL3;
-         }
-       }
-      else
-       {
-         // 충분한 히스토리가 없을 때는 EMPTY_VALUE로 설정
-         avgValLR[bar] = EMPTY_VALUE;
-         stdS[bar] = EMPTY_VALUE;
-         stdSC[bar] = (bar > 0) ? stdSC[bar-1] : 0;
-       }
-    }  
+      bool isCalcTime = IsStdCalculationTime(time[bar]);
+      if (isCalcTime) {         
+         standardDeviationL = iStdDev1.Calculate(bar, avgValLR[bar], LWMAVal[bar]);
+         up1StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL1;
+         down1StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL1;
+         up2StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL2;
+         down2StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL2;
+         up3StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL3;
+         down3StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL3;
+      } else {
+         up1StdAvgValLR[bar]   =   up1StdAvgValLR[bar-1];
+         down1StdAvgValLR[bar] =  down1StdAvgValLR[bar-1];
+         up2StdAvgValLR[bar]   =   up2StdAvgValLR[bar-1];
+         down2StdAvgValLR[bar] =  down2StdAvgValLR[bar-1];
+         up3StdAvgValLR[bar]   =   up3StdAvgValLR[bar-1];
+         down3StdAvgValLR[bar] =  down3StdAvgValLR[bar-1];
+      }         
+   }  
 
    return(rates_total);
   }

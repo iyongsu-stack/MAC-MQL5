@@ -10,6 +10,7 @@
 
 #include <mySmoothingAlgorithm.mqh>
 #include <myBSPCalculation.mqh>
+#include <myFunction.mqh>
 
 #property indicator_separate_window
 
@@ -64,7 +65,11 @@ input double              MultiFactorL3  = 3.0;         // StdMultiFactorL3
 
 input double              MaxBSPMult     = 20.0;         // MaxBSPmultfactor
 
-
+input group "Time Filter"
+input int StdCalcStartTimeHour = 1;      // Start Calculation (Hour)
+input int StdCalcStartTimeMinute = 30;   // Start Calculation (Minute)
+input int StdCalcEndTimeHour = 23;       // End Calculation (Hour)
+input int StdCalcEndTimeMinute = 30;     // End Calculation (Minute)
 
 double DiffPressure[], LWMAVal[],
        avgValLR[], stdS[], stdSC[], 
@@ -188,7 +193,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    if(rates_total <= min_needed)
       return(0);
 
-   int first, second;
+   int first;
    double mVolume, standardDeviationL;
 
    // 첫 계산(히스토리 채움)에서는 new bar 여부와 무관하게 모두 계산
@@ -197,7 +202,6 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    if(prev_calculated > rates_total || prev_calculated <= 0)
      {
       first = 2;  
-      second = first + avgPeriod;
       
       // [Bug Fix] 전체 재계산 시 버퍼 초기화 필수
       // 초기화하지 않으면 DiffPressure[1]에 이전 쓰레기 값이 남아 누적 연산이 폭발함
@@ -231,12 +235,10 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    else
      { 
       first = prev_calculated - 1; 
-      second = first;
      } 
 
    // 메인 계산 루프
-   for(int bar = first; bar < rates_total; bar++)
-     {
+   for(int bar = first; bar < rates_total; bar++){
       if(VolumeType == VOLUME_TICK) mVolume = (double)tick_volume[bar];
       else mVolume = (double)volume[bar];
 
@@ -248,47 +250,29 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
 
       LWMAVal[bar] = _lwma.calculate(DiffPressure[bar], bar, rates_total);
              
-      if(bar >= second)
-       {
-         avgValLR[bar] = myAverage(bar, AvgPeriod, LWMAVal);
+      avgValLR[bar] = myAverage(bar, AvgPeriod, LWMAVal);
 
-         stdS[bar] = iStdDev2.Calculate(bar, avgValLR[bar], LWMAVal[bar]);  
-         
-         // DRAW_COLOR_LINE의 색상 인덱스는 0..N-1 (여기서는 0=Green, 1=Red)
-         if(bar > 0 && stdS[bar] != EMPTY_VALUE && stdS[bar-1] != EMPTY_VALUE)
-         {
-            if(stdS[bar] > stdS[bar-1])
-               stdSC[bar] = 0;
-            else if(stdS[bar] < stdS[bar-1])
-               stdSC[bar] = 1;
-            else
-               stdSC[bar] = stdSC[bar-1];
-         }
-         else
-            stdSC[bar] = (bar > 0) ? stdSC[bar-1] : 0;
+      stdS[bar] = iStdDev2.Calculate(bar, avgValLR[bar], LWMAVal[bar]);  
+      stdSC[bar] = (bar>0) ? (stdS[bar]>=stdS[bar-1]) ? 0 : (stdS[bar]<stdS[bar-1]) ? 1 : stdS[bar-1] : 0;
 
-         if(MnewBar)
-         {
-           standardDeviationL = iStdDev1.Calculate(bar, avgValLR[bar], LWMAVal[bar]);
-
-           up1StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL1;
-           down1StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL1;
-
-           up2StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL2;
-           down2StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL2;
-
-           up3StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL3;
-           down3StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL3;
-         }
-       }
-      else
-       {
-         // 충분한 히스토리가 없을 때는 EMPTY_VALUE로 설정
-         avgValLR[bar] = EMPTY_VALUE;
-         stdS[bar] = EMPTY_VALUE;
-         stdSC[bar] = (bar > 0) ? stdSC[bar-1] : 0;
-       }
-    }  
+      bool isCalcTime = IsStdCalculationTime(time[bar]);
+      if (isCalcTime) {         
+         standardDeviationL = iStdDev1.Calculate(bar, avgValLR[bar], LWMAVal[bar]);
+         up1StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL1;
+         down1StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL1;
+         up2StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL2;
+         down2StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL2;
+         up3StdAvgValLR[bar]   =   standardDeviationL * MultiFactorL3;
+         down3StdAvgValLR[bar] =  -standardDeviationL * MultiFactorL3;
+      } else {
+         up1StdAvgValLR[bar]   =   up1StdAvgValLR[bar-1];
+         down1StdAvgValLR[bar] =  down1StdAvgValLR[bar-1];
+         up2StdAvgValLR[bar]   =   up2StdAvgValLR[bar-1];
+         down2StdAvgValLR[bar] =  down2StdAvgValLR[bar-1];
+         up3StdAvgValLR[bar]   =   up3StdAvgValLR[bar-1];
+         down3StdAvgValLR[bar] =  down3StdAvgValLR[bar-1];
+      }         
+   }  
 
    return(rates_total);
   }
