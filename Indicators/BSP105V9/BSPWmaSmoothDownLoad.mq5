@@ -28,6 +28,10 @@ input int inpWmaPeriod = 10;          // inpwmaPeriod
 input int inpSmoothPeriod = 3;      // inpSmoothPeriod
 
 
+
+bool g_IsWritten = false;
+
+
 double SumBuyRatio[], SumSellRatio[], WmaBuyRatio[], WmaSellRatio[], 
        DiffRatio[], SmoothDiffRatio[], SmoothDiffRatioC1[];
 
@@ -44,6 +48,7 @@ void OnInit()
    ArrayInitialize(DiffRatio,0.0);
    ArrayInitialize(SmoothDiffRatio,0.0);
    ArrayInitialize(SmoothDiffRatioC1,0); 
+   g_IsWritten = false; 
 
 
    SetIndexBuffer(0,SmoothDiffRatio,INDICATOR_DATA);
@@ -104,6 +109,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
       ArrayInitialize(DiffRatio,0.0);
       ArrayInitialize(SmoothDiffRatio,0.0);
       ArrayInitialize(SmoothDiffRatioC1,0);
+      g_IsWritten = false;
      }
 
 //---- The main loop of the indicator calculation
@@ -129,6 +135,26 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
       SmoothDiffRatioC1[bar] = (bar>0) ? (SmoothDiffRatio[bar]>=SmoothDiffRatio[bar-1]) ? 0 : 
                                           (SmoothDiffRatio[bar]<SmoothDiffRatio[bar-1]) ? 1 : SmoothDiffRatio[bar-1] : 0;
      } 
+
+   // --- File Writing Logic ---
+   if(bar >= rates_total && !g_IsWritten) {
+      string filename = "BSPWmaSmooth_DownLoad.csv";
+      int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
+      
+      if(handle != INVALID_HANDLE) {
+         FileWrite(handle, "Time", "Open", "Close", "High", "Low", "SmoothDiffRatio");
+         
+         for(int k=0; k<rates_total; k++) {
+            string timeStr = TimeToString(time[k], TIME_DATE|TIME_MINUTES);
+            FileWrite(handle, timeStr, open[k], close[k], high[k], low[k], SmoothDiffRatio[k]);
+         }
+         FileClose(handle);
+         Print("Data download complete: ", filename);
+         g_IsWritten = true;
+      } else {
+         Print("Failed to open file for writing: ", filename);
+      }
+   } 
 
    return(rates_total);
 

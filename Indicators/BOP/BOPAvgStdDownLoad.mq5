@@ -5,7 +5,7 @@
 //------------------------------------------------------------------
 #property indicator_separate_window
 
-#property indicator_buffers 10
+#property indicator_buffers 11
 #property indicator_plots 7
 
 #property indicator_label7 "Diff"
@@ -60,12 +60,21 @@ input int StdCalcStartTimeMinute = 30;   // Start Calculation (Minute)
 input int StdCalcEndTimeHour = 23;       // End Calculation (Hour)
 input int StdCalcEndTimeMinute = 30;     // End Calculation (Minute)
 
+
+
+bool g_IsWritten = false;
+
 double BOP[], BOPAvg[], Diff[], DiffC[], Up3[], Up2[], Up1[], Down1[], Down2[],
-    Down3[];
+    Down3[], Scale[];
 
 HiStdDev3 *stdDev3 = NULL; // StdDev3 클래스 인스턴스
 
 void OnInit() {
+  if (_Symbol != "XAUUSD" || _Period != PERIOD_M1) {
+     Alert("Error: Symbol must be XAUUSD and Period must be M1");
+     return;
+  }
+
   // HiStdDev3 클래스 인스턴스 생성
   if (stdDev3 != NULL)
     delete stdDev3;
@@ -81,6 +90,7 @@ void OnInit() {
   ArrayInitialize(Down1, 0.0);
   ArrayInitialize(Down2, 0.0);
   ArrayInitialize(Down3, 0.0);
+  ArrayInitialize(Scale, 0.0);
 
   //--- indicator buffers mapping
   SetIndexBuffer(0, Up3, INDICATOR_DATA);
@@ -93,6 +103,7 @@ void OnInit() {
   SetIndexBuffer(7, DiffC, INDICATOR_COLOR_INDEX);
   SetIndexBuffer(8, BOPAvg, INDICATOR_CALCULATIONS);
   SetIndexBuffer(9, BOP, INDICATOR_CALCULATIONS);
+  SetIndexBuffer(10, Scale, INDICATOR_CALCULATIONS);
 
   //---
   IndicatorSetString(
@@ -135,17 +146,20 @@ int OnCalculate(const int rates_total,
     ArrayInitialize(BOPAvg, 0.0);
     ArrayInitialize(Diff, 0.0);
     ArrayInitialize(DiffC, 0);
+    g_IsWritten = false; // Reset flag on recalculation
     ArrayInitialize(Up3, 0.0);
     ArrayInitialize(Up2, 0.0);
     ArrayInitialize(Up1, 0.0);
     ArrayInitialize(Down1, 0.0);
     ArrayInitialize(Down2, 0.0);
     ArrayInitialize(Down3, 0.0);
+    ArrayInitialize(Scale, 0.0);
     if (CheckPointer(stdDev3) == POINTER_DYNAMIC)
       delete stdDev3;
     stdDev3 = new HiStdDev3(inpStdPeriod);
     if (CheckPointer(stdDev3) == POINTER_INVALID)
       Print("OnCalculate: HiStdDev3 재생성 실패");
+    Print("OnCalculate Reset: prev_calculated=", prev_calculated, ", rates_total=", rates_total);
   }
 
   //---
@@ -169,6 +183,10 @@ int OnCalculate(const int rates_total,
       Down1[i] = -standardDeviationL * inpStdMulti1;
       Down2[i] = -standardDeviationL * inpStdMulti2;
       Down3[i] = -standardDeviationL * inpStdMulti3;
+
+      if(standardDeviationL != 0) Scale[i] = Diff[i] / standardDeviationL;
+      else Scale[i] = (i > 0) ? Scale[i-1] : 0.0;
+
     } else {
        if (i > 0) {
           Up3[i] = Up3[i-1];
@@ -177,15 +195,39 @@ int OnCalculate(const int rates_total,
           Down1[i] = Down1[i-1];
           Down2[i] = Down2[i-1];
           Down3[i] = Down3[i-1];
-       } else {
+          Scale[i] = Scale[i-1];
+        } else {
           Up3[i] = 0.0;
           Up2[i] = 0.0;
           Up1[i] = 0.0;
           Down1[i] = 0.0;
           Down2[i] = 0.0;
           Down3[i] = 0.0;
+          Scale[i] = 0.0;
        }
     }
+  }
+
+
+
+  // --- File Writing Logic ---
+  if(i >= rates_total && !g_IsWritten) {
+      string filename = "BOPAvgStd_DownLoad.csv";
+      int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
+      
+      if(handle != INVALID_HANDLE) {
+         FileWrite(handle, "Time", "Open", "Close", "High", "Low", "Diff", "Up1", "Scale");
+         
+         for(int k=0; k<rates_total; k++) {
+            string timeStr = TimeToString(time[k], TIME_DATE|TIME_MINUTES);
+            FileWrite(handle, timeStr, open[k], close[k], high[k], low[k], Diff[k], Up1[k], Scale[k]);
+         }
+         FileClose(handle);
+         Print("Data download complete: ", filename);
+         g_IsWritten = true;
+      } else {
+         Print("Failed to open file for writing: ", filename, " Error: ", GetLastError());
+      }
   }
 
   return (i);

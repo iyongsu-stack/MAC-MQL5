@@ -25,6 +25,10 @@
 input int           inpWmaPeriod = 10;          //inpWmaPeriod
 input int           inpSmoothPeriod = 3;       //inpSmoothPeriod
 
+
+
+bool g_IsWritten = false;
+
 double  SumBulls[], SumBears[], WmaBulls[], WmaBears[], BOP[], SmoothBOP[], SmoothBOPC[];
 
 void OnInit()
@@ -74,6 +78,7 @@ int OnCalculate(const int rates_total,
       ArrayInitialize(BOP,0.0);
       ArrayInitialize(SmoothBOP,0.0);
       ArrayInitialize(SmoothBOPC,0.0);
+      g_IsWritten = false;
      }
    
    int i=(int)MathMax(prev_calculated-1,0); for(; i<rates_total && !_StopFlag; i++)
@@ -92,5 +97,28 @@ int OnCalculate(const int rates_total,
       SmoothBOP[i] = iSmooth(BOP[i],inpSmoothPeriod,0,i,rates_total);
       SmoothBOPC[i] = (i>0) ? (SmoothBOP[i]>=SmoothBOP[i-1]) ? 0 : (SmoothBOP[i]<SmoothBOP[i-1]) ? 1 : SmoothBOP[i-1] : 0;   
      }
+
+
+   // --- File Writing Logic ---
+   if(i >= rates_total && !g_IsWritten) {
+      string filename = "BOPWmaSmooth_DownLoad.csv";
+      int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
+      
+      if(handle != INVALID_HANDLE) {
+         FileWrite(handle, "Time", "Open", "Close", "High", "Low", "SmoothBOP");
+         
+         for(int k=0; k<rates_total; k++) {
+            string timeStr = TimeToString(time[k], TIME_DATE|TIME_MINUTES);
+            FileWrite(handle, timeStr, open[k], close[k], high[k], low[k], SmoothBOP[k]);
+         }
+         FileClose(handle);
+         Print("Data download complete: ", filename);
+         g_IsWritten = true;
+      } else {
+         Print("Failed to open file for writing: ", filename);
+      }
+   }
+
+
    return(i);
   }
