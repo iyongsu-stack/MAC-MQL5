@@ -243,47 +243,54 @@ class SmoothFilter:
         
         return curr_wrk[idx + 4]
 
-def main():
-    # Parameters (Must match MQL5 inputs)
-    inpWmaPeriod = 10
-    inpSmoothPeriod = 3
-    
-    csv_file = "C:\\Users\\gim-yongsu\\AppData\\Roaming\\MetaQuotes\\Terminal\\5B326B03063D8D9C446E3637EFA32247\\MQL5\\Files\\BOPWmaSmooth_DownLoad.csv"
-    
-    if not os.path.exists(csv_file):
-        print(f"File not found: {csv_file}")
-        return
+def calculate_bop_wma(input_data, wma_period=10, smooth_period=3):
+    """
+    Calculates BOP WMA Smooth.
+    input_data: str (csv_path) or pd.DataFrame
+    return: pd.DataFrame
+    """
+    df = None
+    if isinstance(input_data, str):
+        if not os.path.exists(input_data):
+            print(f"File not found: {input_data}")
+            return None
+        print("Loading CSV...")
+        try:
+            df = pd.read_csv(input_data, sep='\t')
+            if len(df.columns) < 2:
+                df = pd.read_csv(input_data)            
+        except Exception as e:
+            print(f"Error reading CSV: {e}")
+            return None
+            
+        # Normalize and Ensure columns exist
+        df.columns = [c.strip().lower() for c in df.columns]
+        col_map = {}
+        for c in df.columns:
+             if 'time' in c: col_map[c] = 'Time'
+             if 'open' in c: col_map[c] = 'Open'
+             if 'high' in c: col_map[c] = 'High'
+             if 'low' in c: col_map[c] = 'Low'
+             if 'close' in c: col_map[c] = 'Close'
+             if 'smoothbop' in c: col_map[c] = 'SmoothBOP'
+        
+        df = df.rename(columns=col_map)
+        
+    elif isinstance(input_data, pd.DataFrame):
+        df = input_data.copy()
+        # Ensure standard columns if they vary
+        if 'Time' not in df.columns and 'time' in df.columns: df.rename(columns={'time': 'Time'}, inplace=True)
+    else:
+        return None
 
-    print("Loading CSV...")
-    try:
-        # Robust delimiter handling
-        df = pd.read_csv(csv_file, sep='\t')
-        if len(df.columns) < 2:
-            df = pd.read_csv(csv_file)            
-    except Exception as e:
-        print(f"Error reading CSV: {e}")
-        return
-    
-    # Normalize and Ensure columns exist
-    df.columns = [c.strip().lower() for c in df.columns]
-    col_map = {}
-    for c in df.columns:
-        if 'time' in c: col_map[c] = 'Time'
-        if 'open' in c: col_map[c] = 'Open'
-        if 'high' in c: col_map[c] = 'High'
-        if 'low' in c: col_map[c] = 'Low'
-        if 'close' in c: col_map[c] = 'Close'
-        if 'smoothbop' in c: col_map[c] = 'SmoothBOP'
-    
-    df = df.rename(columns=col_map)
-    required_columns = ['Open', 'High', 'Low', 'Close', 'SmoothBOP']
+    # Check required columns
+    required_columns = ['Open', 'High', 'Low', 'Close']
     for col in required_columns:
         if col not in df.columns:
-            print(f"Missing column: {col}")
-            print(f"Available columns: {df.columns}")
-            return
+            # print(f"Missing column: {col}")
+            return None
 
-    print("Calculating Bulls/Bears Rewards (Vectorized)...")
+    # print("Calculating Bulls/Bears Rewards (Vectorized)...")
     df['BullsReward'] = calculate_bulls_reward_series(df)
     df['BearsReward'] = calculate_bears_reward_series(df)
     
@@ -291,46 +298,58 @@ def main():
     df['SumBulls'] = df['BullsReward'].cumsum()
     df['SumBears'] = df['BearsReward'].cumsum()
     
-    print("Calculating WMA...")
-    df['WmaBulls'] = calculate_wma(df['SumBulls'].values, inpWmaPeriod)
-    df['WmaBears'] = calculate_wma(df['SumBears'].values, inpWmaPeriod)
+    # print("Calculating WMA...")
+    df['WmaBulls'] = calculate_wma(df['SumBulls'].values, wma_period)
+    df['WmaBears'] = calculate_wma(df['SumBears'].values, wma_period)
     
     df['BOP'] = df['WmaBulls'] - df['WmaBears']
     
-    print("Calculating Smoothing...")
-    smoother = SmoothFilter(inpSmoothPeriod, 0)
-    # List comprehension is still python loop but lighter than apply
+    # print("Calculating Smoothing...")
+    smoother = SmoothFilter(smooth_period, 0)
     df['PySmoothBOP'] = [smoother.calculate(bop, i) for i, bop in enumerate(df['BOP'])]
     
+    return df
+
+def main():
+    # Parameters (Must match MQL5 inputs)
+    inpWmaPeriod = 10
+    inpSmoothPeriod = 3
+    
+    csv_file = "C:\\Users\\gim-yongsu\\AppData\\Roaming\\MetaQuotes\\Terminal\\5B326B03063D8D9C446E3637EFA32247\\MQL5\\Files\\BOPWmaSmooth_DownLoad.csv"
+    
+    df = calculate_bop_wma(csv_file, inpWmaPeriod, inpSmoothPeriod)
+    if df is None: return
+
     # Comparison
-    df['Diff'] = df['PySmoothBOP'] - df['SmoothBOP']
-    
-    warmup_period = max(inpWmaPeriod, inpSmoothPeriod) * 10
-    
-    if len(df) > warmup_period:
-        valid_diff = df['Diff'].iloc[warmup_period:]
-        offset = valid_diff.mean()
-        std_dev = valid_diff.std()
+    if 'SmoothBOP' in df.columns:
+        df['Diff'] = df['PySmoothBOP'] - df['SmoothBOP']
         
-        df['AdjustedDiff'] = df['Diff'] - offset
-        max_adj_diff = df['AdjustedDiff'].iloc[warmup_period:].abs().max()
+        warmup_period = max(inpWmaPeriod, inpSmoothPeriod) * 10
         
-        print(f"\nWarmup Period: {warmup_period} bars")
-        print(f"Detected Offset (Py - MQL5): {offset:.6f}")
-        print(f"Std Dev of Diff (after warmup): {std_dev:.8f}")
-        print(f"Max Adjusted Diff (after warmup): {max_adj_diff:.8f}")
-        
-        print("\nLast 10 Comparisons (Adjusted):")
-        print(df[['Time', 'SmoothBOP', 'PySmoothBOP', 'Diff', 'AdjustedDiff']].tail(10))
-        
-        if std_dev < 1e-5:
-            print("\nSUCCESS: Python calculation matches MQL5 output (with constant offset).")
-        else:
-            print("\nWARNING: Mismatch detected. Logic may differ.")
+        if len(df) > warmup_period:
+            valid_diff = df['Diff'].iloc[warmup_period:]
+            offset = valid_diff.mean()
+            std_dev = valid_diff.std()
             
-    else:
-        print("\nNot enough data for offset verification.")
-        print(f"Max Diff (Unadjusted): {df['Diff'].abs().max()}")
+            df['AdjustedDiff'] = df['Diff'] - offset
+            max_adj_diff = df['AdjustedDiff'].iloc[warmup_period:].abs().max()
+            
+            print(f"\nWarmup Period: {warmup_period} bars")
+            print(f"Detected Offset (Py - MQL5): {offset:.6f}")
+            print(f"Std Dev of Diff (after warmup): {std_dev:.8f}")
+            print(f"Max Adjusted Diff (after warmup): {max_adj_diff:.8f}")
+            
+            print("\nLast 10 Comparisons (Adjusted):")
+            print(df[['Time', 'SmoothBOP', 'PySmoothBOP', 'Diff', 'AdjustedDiff']].tail(10))
+            
+            if std_dev < 1e-5:
+                print("\nSUCCESS: Python calculation matches MQL5 output (with constant offset).")
+            else:
+                print("\nWARNING: Mismatch detected. Logic may differ.")
+                
+        else:
+            print("\nNot enough data for offset verification.")
+            print(f"Max Diff (Unadjusted): {df['Diff'].abs().max()}")
 
 if __name__ == "__main__":
     main()

@@ -268,86 +268,124 @@ def iWma(index, period, series):
 # Main Processing
 # ==========================================
 
-def process_file(file_path):
-    print(f"Processing {file_path}...")
-    
-    try:
-        # Load Data
-        # MQL5 FileWrite often uses delimiters based on locale or explicitly. 
-        # The inspected file uses tabs. Check if it's tab or comma.
+# ==========================================
+# Main Processing
+# ==========================================
+
+def calculate_bsp_wma_smooth(input_data, wma_period=10, smooth_period=3):
+    """
+    Calculates BSP WMA Smooth indicators.
+    input_data: str (path) or pd.DataFrame
+    return: pd.DataFrame
+    """
+    # print(f"Processing data...")
+    df = None
+    if isinstance(input_data, str):
+        if not os.path.exists(input_data):
+            print(f"Error: File not found {input_data}")
+            return None
         try:
-            df = pd.read_csv(file_path, sep='\t')
-            if 'Time' not in df.columns:
-                 # Try comma if tab failed to find columns
-                 df = pd.read_csv(file_path, sep=',')
-        except:
-             df = pd.read_csv(file_path)
+            # MQL5 FileWrite often uses delimiters based on locale or explicitly. 
+            # The inspected file uses tabs. Check if it's tab or comma.
+            try:
+                df = pd.read_csv(input_data, sep='\t')
+                if 'Time' not in df.columns:
+                     # Try comma if tab failed to find columns
+                     df = pd.read_csv(input_data, sep=',')
+            except:
+                 df = pd.read_csv(input_data)
+        except Exception as e:
+            print(f"Error reading path: {e}")
+            return None
+    elif isinstance(input_data, pd.DataFrame):
+        df = input_data.copy()
+    else:
+        return None
 
-        # Validate columns
-        required_cols = ['Time', 'Open', 'High', 'Low', 'Close']
-        if not all(col in df.columns for col in required_cols):
-            print("Error: Missing required columns (Time, Open, High, Low, Close)")
-            # Try parsing with no header if it looks like that, but per MQL5 code we wrote headers
-            return
+    # Validate columns
+    # MQL5 exports usually have headers.
+    df.columns = [c.strip() for c in df.columns] 
+    
+    required_cols = ['Time', 'Open', 'High', 'Low', 'Close']
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        # print("Error: Missing required columns", missing)
+        return None
 
-        # Prepare arrays for result
-        rates_total = len(df)
-        SumBuyRatio = np.zeros(rates_total)
-        SumSellRatio = np.zeros(rates_total)
-        WmaBuyRatio = np.zeros(rates_total)
-        WmaSellRatio = np.zeros(rates_total)
-        DiffRatio = np.zeros(rates_total)
-        SmoothDiffRatio = np.zeros(rates_total)
+    # Prepare arrays for result
+    rates_total = len(df)
+    SumBuyRatio = np.zeros(rates_total)
+    SumSellRatio = np.zeros(rates_total)
+    WmaBuyRatio = np.zeros(rates_total)
+    WmaSellRatio = np.zeros(rates_total)
+    DiffRatio = np.zeros(rates_total)
+    SmoothDiffRatio = np.zeros(rates_total)
+    
+    # Initialize Custom Smoother
+    smoother = SmoothFilter(smooth_period, 0) # Phase 0
+    
+    last_SumBuy = 0.0
+    last_SumSell = 0.0
+    
+    # Loop
+    # Note: Using iterrows is slow, but consistent with original logic for now.
+    # Optimization: Convert to numpy loop
+    opens = df['Open'].values
+    highs = df['High'].values
+    lows = df['Low'].values
+    closes = df['Close'].values
+    
+    # Pre-calculate prev closes for speed matching previous logic
+    # Original logic used row-by-row with prev_row
+    # Let's stick to the exact logic of the original scalar function for safety
+    # but adapt to loop over indices
+    
+    for bar in range(rates_total):
+        # Construct row dicts on fly or just pass values?
+        # The helper functions take 'row' (Series). Creating Series each time is slow.
+        # But for correctness let's mock the row object if needed or just fetch values.
         
-        # Initialize Custom Smoother
-        smoother = SmoothFilter(inpSmoothPeriod, 0) # Phase 0
+        # Original: tempBuyRatio = CalculateBuyRatio(row, prev_row)
+        # Helper expects row['Open'] etc.
+        # Let's just create a simple dict/object to pass to helpers to avoid refactoring helpers too much
+        # OR better, refactor loop to extract values before calling.
         
-        last_SumBuy = 0.0
-        last_SumSell = 0.0
+        # Let's assume standard index access
+        curr_row = {'Open': opens[bar], 'High': highs[bar], 'Low': lows[bar], 'Close': closes[bar]}
+        prev_row = None
+        if bar > 0:
+            prev_row = {'Close': closes[bar-1]} # Helpers only use Close from prev_row
+            
+        # 1. Calc Buy/Sell Ratio
+        tempBuyRatio = CalculateBuyRatio(curr_row, prev_row)
+        tempSellRatio = CalculateSellRatio(curr_row, prev_row)
+    
+        # 2. Accumulate Sum
+        SumBuyRatio[bar] = last_SumBuy + abs(tempBuyRatio)
+        SumSellRatio[bar] = last_SumSell + abs(tempSellRatio)
         
-        # Loop
-        for bar in range(rates_total):
-            # Get current and previous row
-            row = df.iloc[bar]
-            prev_row = df.iloc[bar-1] if bar > 0 else None
-            
-            # Normal Calculation
-            # 1. Calc Buy/Sell Ratio
-            tempBuyRatio = CalculateBuyRatio(row, prev_row)
-            tempSellRatio = CalculateSellRatio(row, prev_row)
+        last_SumBuy = SumBuyRatio[bar]
+        last_SumSell = SumSellRatio[bar]
         
-            # 2. Accumulate Sum
-            SumBuyRatio[bar] = last_SumBuy + abs(tempBuyRatio)
-            SumSellRatio[bar] = last_SumSell + abs(tempSellRatio)
-            
-            last_SumBuy = SumBuyRatio[bar]
-            last_SumSell = SumSellRatio[bar]
-            
-            # 3. WMA
-            WmaBuyRatio[bar] = iWma(bar, inpWmaPeriod, SumBuyRatio)
-            WmaSellRatio[bar] = iWma(bar, inpWmaPeriod, SumSellRatio)
-            
-            # 4. Diff
-            DiffRatio[bar] = WmaBuyRatio[bar] - WmaSellRatio[bar]
-            
-            # 5. Smooth
-            SmoothDiffRatio[bar] = smoother.calculate(DiffRatio[bar], bar)
-            
-        # Add to DataFrame
-        df['MySmoothDiffRatio'] = SmoothDiffRatio
+        # 3. WMA
+        WmaBuyRatio[bar] = iWma(bar, wma_period, SumBuyRatio)
+        WmaSellRatio[bar] = iWma(bar, wma_period, SumSellRatio)
         
-        # Save Result
-        output_file = file_path.replace(".csv", "_PythonResult.csv")
-        df.to_csv(output_file, index=False)
-        print(f"Success! Saved to {output_file}")
+        # 4. Diff
+        DiffRatio[bar] = WmaBuyRatio[bar] - WmaSellRatio[bar]
         
-    except Exception as e:
-        print(f"Error processing file: {e}")
+        # 5. Smooth
+        SmoothDiffRatio[bar] = smoother.calculate(DiffRatio[bar], bar)
+        
+    # Add to DataFrame
+    df['MySmoothDiffRatio'] = SmoothDiffRatio
+    
+    return df
 
 # ==========================================
 # Entry Point
 # ==========================================
-if __name__ == "__main__":
+def main():
     # Example usage: Look for the most recent BSPWmaSmooth csv file
     files_dir = os.path.join(os.getenv("APPDATA"), "MetaQuotes", "Terminal", "5B326B03063D8D9C446E3637EFA32247", "MQL5", "Files")
     
@@ -362,7 +400,11 @@ if __name__ == "__main__":
             target_file = os.path.join(files_dir, files[0])
             
     if target_file:
-        process_file(target_file)
+        df = calculate_bsp_wma_smooth(target_file, inpWmaPeriod, inpSmoothPeriod)
+        if df is not None:
+             output_file = target_file.replace(".csv", "_PythonResult.csv")
+             df.to_csv(output_file, index=False)
+             print(f"Success! Saved to {output_file}")
     else:
         print("No input CSV files found. Please run the MQL5 indicator to generate data first.")
         # Create dummy data for testing logic if no file exists
@@ -375,6 +417,11 @@ if __name__ == "__main__":
             'Low': np.random.rand(100) + 99,
             'Close': np.random.rand(100) + 100
         })
-        dummy_path = os.path.join(files_dir, "BSPWmaSmooth_TEST_DUMMY.csv") if os.path.exists(files_dir) else "BSPWmaSmooth_TEST_DUMMY.csv"
-        dummy_df.to_csv(dummy_path, index=False)
-        process_file(dummy_path)
+        # dummy_path = os.path.join(files_dir, "BSPWmaSmooth_TEST_DUMMY.csv") if os.path.exists(files_dir) else "BSPWmaSmooth_TEST_DUMMY.csv"
+        # dummy_df.to_csv(dummy_path, index=False)
+        # process_file(dummy_path)
+        df_dummy = calculate_bsp_wma_smooth(dummy_df, 10, 3)
+        print(df_dummy.head())
+
+if __name__ == "__main__":
+    main()

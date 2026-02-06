@@ -8,13 +8,6 @@
 #property version   "1.00"
 #property script_show_inputs
 
-//--- Input parameters
-input int      StartYear  = 2024; // 시작 년도
-input int      StartMonth = 1;    // 시작 월
-input int      StartDay   = 1;    // 시작 일
-input int      EndYear    = 2025; // 종료 년도
-input int      EndMonth   = 12;   // 종료 월
-input int      EndDay     = 31;   // 종료 일
 
 //+------------------------------------------------------------------+
 //| Script program start function                                    |
@@ -34,30 +27,13 @@ void OnStart()
       return;
      }
 
-   // 2. 시간 설정
-   MqlDateTime dtStart, dtEnd;
-   dtStart.year = StartYear;
-   dtStart.mon  = StartMonth;
-   dtStart.day  = StartDay;
-   dtStart.hour = 0;
-   dtStart.min  = 0;
-   dtStart.sec  = 0;
 
-   dtEnd.year = EndYear;
-   dtEnd.mon  = EndMonth;
-   dtEnd.day  = EndDay;
-   dtEnd.hour = 23;
-   dtEnd.min  = 59;
-   dtEnd.sec  = 59;
-
-   datetime startTime = StructToTime(dtStart);
-   datetime endTime   = StructToTime(dtEnd);
 
    // 3. 데이터 요청 (CopyRates)
    MqlRates rates[];
    ArraySetAsSeries(rates, false); // 시간 순서대로 정렬 (과거 -> 현재)
 
-   int copied = CopyRates(_Symbol, _Period, startTime, endTime, rates);
+   int copied = CopyRates(_Symbol, _Period, 1, Bars(_Symbol, _Period)-1, rates);
 
    if(copied <= 0)
      {
@@ -68,9 +44,7 @@ void OnStart()
    Print("총 ", copied, "개의 1분봉 데이터를 다운로드했습니다.");
 
    // 4. 파일 이름 생성 및 열기
-   string fileName = StringFormat("xauusd_%d_%d_%d_%d_%d_%d.csv",
-                                  StartYear, StartMonth, StartDay,
-                                  EndYear, EndMonth, EndDay);
+   string fileName = "XAUUSD.csv";
 
    // MQL5/Files 폴더 내에 생성됨
    int fileHandle = FileOpen(fileName, FILE_WRITE | FILE_CSV | FILE_ANSI, ",");

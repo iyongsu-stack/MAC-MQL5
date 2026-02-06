@@ -55,7 +55,7 @@
 ENUM_APPLIED_VOLUME  VolumeType     = VOLUME_TICK;    // Volume
 
 input int                 LwmaPeriod    = 25;          // WmaPeriod1
-input int                 AvgPeriod    = 30;          //AvgPeriod
+input int                 AvgPeriod    = 60;          //AvgPeriod
 input int                 StdPeriodL    = 5000;        // StdPeriodL
 input int                 StdPeriodS    = 2;        // StdPeriodS(=2 고정)
 
@@ -121,30 +121,19 @@ void OnInit()
  
    _lwma.init((LwmaPeriod > 1) ? LwmaPeriod : 2);
 
-   // [Code Improvement] 포인트 계산 로직을 모든 상품에 범용적으로 적용 가능하도록 개선
-   // 상품의 종류(Forex, CFD 등)와 최소 가격 단위(_Point)를 직접 참조하여 ToPoint를 동적으로 계산합니다.
-   // 이를 통해 "XAUUSD"와 같은 특정 심볼 이름을 하드코딩할 필요가 없어지며, 다른 CFD 상품에도 자동 대응됩니다.
-   
-   // 1. 상품의 최소 가격 변동폭(_Point)이 유효한지 확인합니다.
    if(_Point > 0)
      {
-       // 2. 기본적으로 ToPoint를 (1.0 / _Point)로 설정합니다.
-       //    이것만으로 대부분의 CFD, 주식, 지수(XAUUSD, US30 등)는 최소 가격 변동이 '1'로 정규화됩니다.
-       //    예: XAUUSD의 _Point가 0.01이면, ToPoint는 1/0.01 = 100이 됩니다.
        ToPoint = 1.0 / _Point;
 
-       // 3. 만약 상품이 Forex일 경우에만, 4자리/2자리 브로커와의 호환성을 위해 스케일을 보정합니다.
        ENUM_SYMBOL_CALC_MODE calcMode = (ENUM_SYMBOL_CALC_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_CALC_MODE);
        bool isGold = (StringFind(_Symbol, "XAU") != -1) || (StringFind(_Symbol, "GOLD") != -1);
        if (calcMode == SYMBOL_CALC_MODE_FOREX && _Digits % 2 == 0 && !isGold)
        {
-           // _Digits가 짝수(2, 4)인 경우 10을 추가로 곱해 1핍(pip)의 가치를 '10'으로 통일합니다.
            ToPoint *= 10.0;
        }
    }
    else
    {
-       // 4. _Point가 0인 비정상적인 경우에 대한 방어 코드
        ToPoint = 1.0;
        Print("Warning: Symbol ", _Symbol, " has a point size of 0. ToPoint set to 1.");
    }
@@ -188,16 +177,8 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    const int stdPeriodL = (StdPeriodL>1) ? StdPeriodL : 2;
    const int stdPeriodS = (StdPeriodS>1) ? StdPeriodS : 2;
 
-   // 최소 바 수 체크 (bar-1 접근 + lwma/avg/std 윈도우 확보)
-   const int min_needed = 2 + lwmaPeriod + avgPeriod + MathMax(stdPeriodL, stdPeriodS);
-   if(rates_total <= min_needed)
-      return(0);
-
    int first;
    double mVolume, standardDeviationL;
-
-   // 첫 계산(히스토리 채움)에서는 new bar 여부와 무관하게 모두 계산
-   const bool MnewBar = (prev_calculated<=0) ? true : isNewBar(_Symbol);
 
    if(prev_calculated > rates_total || prev_calculated <= 0)
      {

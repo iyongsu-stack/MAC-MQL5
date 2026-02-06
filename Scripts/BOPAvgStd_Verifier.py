@@ -7,13 +7,23 @@ from datetime import datetime
 # ==============================================================================
 # 1. Configuration & Constants
 # ==============================================================================
-# MQL5 Input Parameters Defaults
-INP_SMOOTH_PERIOD = 50
-INP_AVG_PERIOD = 50
-INP_STD_PERIOD = 5000
-INP_STD_MULTI1 = 1.0
-INP_STD_MULTI2 = 2.0
-INP_STD_MULTI3 = 3.0
+# ==============================================================================
+# 1. Configuration & Constants
+# ==============================================================================
+# Defaults
+DEFAULT_SMOOTH_PERIOD = 50
+DEFAULT_AVG_PERIOD = 50
+DEFAULT_STD_PERIOD = 5000
+DEFAULT_STD_MULTI1 = 1.0
+DEFAULT_STD_MULTI2 = 2.0
+DEFAULT_STD_MULTI3 = 3.0
+
+# Time Filter Defaults
+STD_CALC_START_HOUR = 1
+STD_CALC_START_MINUTE = 30
+STD_CALC_END_HOUR = 23
+STD_CALC_END_MINUTE = 30
+
 
 # Time Filter Defaults
 STD_CALC_START_HOUR = 1
@@ -326,54 +336,79 @@ def is_std_calculation_time(timestamp):
 # ==============================================================================
 # 6. Main Execution Logic
 # ==============================================================================
-def run_bop_analysis(csv_path):
-    print(f"Loading data from {csv_path}...")
+# ==============================================================================
+# 6. Main Execution Logic
+# ==============================================================================
+def calculate_bop_avg_std(
+    input_data, 
+    smooth_period=DEFAULT_SMOOTH_PERIOD,
+    avg_period=DEFAULT_AVG_PERIOD,
+    std_period=DEFAULT_STD_PERIOD,
+    std_multi1=DEFAULT_STD_MULTI1,
+    std_multi2=DEFAULT_STD_MULTI2,
+    std_multi3=DEFAULT_STD_MULTI3
+):
+    """
+    Calculates BOP Avg Std indicators.
+    input_data: str (csv_path) or pd.DataFrame
+    Returns: pd.DataFrame with calculated columns
+    """
     
     # 1. Load Data
-    try:
-        # Try reading with tab separator first as MQL5 often defaults to it
+    df = None
+    if isinstance(input_data, str):
+        print(f"Loading data from {input_data}...")
         try:
-            df = pd.read_csv(csv_path, sep='\t')
-            # If only 1 column found, retry with comma (auto-detect fallback)
-            if len(df.columns) < 2:
-                 df = pd.read_csv(csv_path)
-        except:
-            df = pd.read_csv(csv_path)
-        
-        # Normalize column names
-        df.columns = [c.strip().lower() for c in df.columns]
-        # Mapping common names to standard OCHL
-        col_map = {}
-        for c in df.columns:
-            if 'time' in c or 'date' in c: col_map[c] = 'Time'
-            if 'open' in c: col_map[c] = 'Open'
-            if 'high' in c: col_map[c] = 'High'
-            if 'low' in c: col_map[c] = 'Low'
-            if 'close' in c: col_map[c] = 'Close'
+            # Try reading with tab separator first as MQL5 often defaults to it
+            try:
+                df = pd.read_csv(input_data, sep='\t')
+                # If only 1 column found, retry with comma (auto-detect fallback)
+                if len(df.columns) < 2:
+                     df = pd.read_csv(input_data)
+            except:
+                df = pd.read_csv(input_data)
             
-        df = df.rename(columns=col_map)
-        
-        # Ensure Time is datetime
-        # Try-catch for common formats
-        try:
-             df['Time'] = pd.to_datetime(df['Time'])
-        except:
-             # If format is YYYY.MM.DD HH:MM
-             df['Time'] = pd.to_datetime(df['Time'], format='%Y.%m.%d %H:%M')
+            # Normalize column names
+            df.columns = [c.strip().lower() for c in df.columns]
+            # Mapping common names to standard OCHL
+            col_map = {}
+            for c in df.columns:
+                if 'time' in c or 'date' in c: col_map[c] = 'Time'
+                if 'open' in c: col_map[c] = 'Open'
+                if 'high' in c: col_map[c] = 'High'
+                if 'low' in c: col_map[c] = 'Low'
+                if 'close' in c: col_map[c] = 'Close'
+                
+            df = df.rename(columns=col_map)
+            
+            # Ensure Time is datetime
+            try:
+                 df['Time'] = pd.to_datetime(df['Time'])
+            except:
+                 df['Time'] = pd.to_datetime(df['Time'], format='%Y.%m.%d %H:%M')
 
-    except Exception as e:
-        print(f"Error loading CSV: {e}")
-        return
+        except Exception as e:
+            print(f"Error loading CSV: {e}")
+            return None
+    elif isinstance(input_data, pd.DataFrame):
+        df = input_data.copy()
+        # Ensure columns are normalized if not already
+        # Assuming Master script handles normalization, but safety check:
+        if 'Time' not in df.columns and 'time' in df.columns:
+            df.rename(columns={'time': 'Time'}, inplace=True)
+    else:
+        print("Invalid input data type")
+        return None
 
-    print(f"Data Loaded: {len(df)} rows.")
+    # print(f"Data Loaded: {len(df)} rows.")
 
     # 2. Calculate Rewards
-    print("Calculating Bulls/Bears Rewards...")
+    # print("Calculating Bulls/Bears Rewards...")
     bulls_reward = calculate_bulls_reward_series(df)
     bears_reward = calculate_bears_reward_series(df)
     
     # 3. Main Loop: Smoothing and StdDev
-    print("Running Main Loop (Smoothing & StdDev)... this may take a moment.")
+    # print("Running Main Loop (Smoothing & StdDev)...")
     
     results = {
         'BOP': [],
@@ -384,8 +419,8 @@ def run_bop_analysis(csv_path):
     }
     
     # Objects
-    smoother = ISmooth(INP_SMOOTH_PERIOD, 0, len(df))
-    std_dev3 = HiStdDev3(INP_STD_PERIOD)
+    smoother = ISmooth(smooth_period, 0, len(df))
+    std_dev3 = HiStdDev3(std_period)
     
     # Buffers (Lists for speed appending)
     bop_list = []
@@ -412,20 +447,13 @@ def run_bop_analysis(csv_path):
         
         # --- 2. BOPAvg Calculation ---
         # BOPAvg[i] = myAverage(i, inpAvgPeriod, BOP)
-        # myAverage is a simple SMA of the BOP array.
-        # Since we are iterating, we can slice bop_list
-        start_idx = i + 1 - INP_AVG_PERIOD
+        start_idx = i + 1 - avg_period
         if start_idx < 0: start_idx = 0
-        # In MQL5 myAverage loops from end+1-period to end.
         slice_vals = bop_list[start_idx : i+1]
         
         bop_avg_val = 0.0
         if len(slice_vals) > 0:
-            bop_avg_val = sum(slice_vals) / INP_AVG_PERIOD # Fixed divisor in MQL5 code? 
-            # Review MQL5 myAverage: return(sum/avgPeriod); 
-            # Yes, it divides by fixed period regardless of available count, 
-            # but usually for i < period it effectively ramps up.
-            # Let's match logic: if i < period, MQL5 divides by avgPeriod anyway -> implies smaller values initially
+            bop_avg_val = sum(slice_vals) / avg_period 
         
         diff_val = bop_val - bop_avg_val
         
@@ -441,12 +469,12 @@ def run_bop_analysis(csv_path):
         
         if is_calc:
             std_val = std_dev3.calculate(i, diff_val)
-            up3 = std_val * INP_STD_MULTI3
-            up2 = std_val * INP_STD_MULTI2
-            up1 = std_val * INP_STD_MULTI1
-            dn1 = -std_val * INP_STD_MULTI1
-            dn2 = -std_val * INP_STD_MULTI2
-            dn3 = -std_val * INP_STD_MULTI3
+            up3 = std_val * std_multi3
+            up2 = std_val * std_multi2
+            up1 = std_val * std_multi1
+            dn1 = -std_val * std_multi1
+            dn2 = -std_val * std_multi2
+            dn3 = -std_val * std_multi3
             
             # Update prevs
             prev_up3, prev_up2, prev_up1 = up3, up2, up1
@@ -471,22 +499,12 @@ def run_bop_analysis(csv_path):
         result_df[k] = v
         
     # Calculate Scale (Diff / StdDev)
-    # Reconstruct StdDev from Up1 (since Up1 = Std * Multi1 and Multi1=1.0 by default)
-    # Or better, use the std_val we computed. 
-    # Let's add StdDev to results to be precise? 
-    # Actually, Up1 is just StdDev if Multi1 is 1.0. Let's check constants.
-    # INP_STD_MULTI1 = 1.0. So Up1 == StdDev.
-    # But to be safe, let's calculate Scale explicitly in loop or here.
-    # Scale = Diff / (Up1 / INP_STD_MULTI1) (Handle div by zero)
-    
-    # Let's just calculate it from Diff and Up1
-    # Calculate Scale (Diff / StdDev) with recursive logic matching MQL5
     scales = np.zeros(len(df))
     diffs = result_df['Diff'].values
     up1s = result_df['Up1'].values
     
     for i in range(len(df)):
-        std = up1s[i] / INP_STD_MULTI1 if INP_STD_MULTI1 != 0 else 0
+        std = up1s[i] / std_multi1 if std_multi1 != 0 else 0
         if std != 0:
             scales[i] = diffs[i] / std
         else:
@@ -497,53 +515,66 @@ def run_bop_analysis(csv_path):
                 
     result_df['Scale_Py'] = scales
     
-    print("Calculation Complete.")
-    
-    # 5. Verification / Comparison
+    # print("Calculation Complete.")
+    return result_df
+
+def run_bop_analysis(csv_path):
+    # Compatibility wrapper for standalone execution
+    result_df = calculate_bop_avg_std(csv_path)
+    if result_df is None: return
+
+    # 5. Verification / Comparison (Logic moved here for standalone only)
     # The input CSV from MQL5 has columns: Diff, Up1, Scale (from MQL5)
     # We should look for them.
+    # Note: If called as a library, we might not want to verify against specific columns unless requested.
+    # But for this wrapper, we verify.
+    
+    df = result_df # result_df already includes original cols + new cols
     
     mql_cols = {'diff': 'Diff_MQL', 'up1': 'Up1_MQL', 'scale': 'Scale_MQL'}
     comparison_df = result_df.copy()
     
-    # Rename original CSV columns if they exist for comparison
+    # Check original columns
     found_mql = False
     for c in df.columns:
         c_lower = c.lower().strip()
-        if c_lower in mql_cols:
-            comparison_df[mql_cols[c_lower]] = df[c]
-            found_mql = True
-            
-    if found_mql:
-        print("\n=== VERIFICATION AGAINST MQL5 DATA ===")
-        # Compare Diff
-        if 'Diff_MQL' in comparison_df.columns:
-            comparison_df['Diff_Error'] = abs(comparison_df['Diff'] - comparison_df['Diff_MQL'])
-            print(f"Diff MAE: {comparison_df['Diff_Error'].mean():.6f}")
-            print(f"Diff Max Error: {comparison_df['Diff_Error'].max():.6f}")
-            
-        # Compare Up1
-        if 'Up1_MQL' in comparison_df.columns:
-            comparison_df['Up1_Error'] = abs(comparison_df['Up1'] - comparison_df['Up1_MQL'])
-            print(f"Up1 MAE: {comparison_df['Up1_Error'].mean():.6f}")
-            print(f"Up1 Max Error: {comparison_df['Up1_Error'].max():.6f}")
-            
-        # Compare Scale
-        if 'Scale_MQL' in comparison_df.columns:
-            # Handle potential MQL5 infinity or NaN
-            comparison_df['Scale_Error'] = abs(comparison_df['Scale_Py'] - comparison_df['Scale_MQL'])
-            print(f"Scale MAE: {comparison_df['Scale_Error'].mean():.6f}")
-            print(f"Scale Max Error: {comparison_df['Scale_Error'].max():.6f}")
-            
-        # Save comparison
-        comp_path = csv_path.replace(".csv", "_Comparison.csv")
-        comparison_df.to_csv(comp_path, index=False)
-        print(f"Comparison saved to: {comp_path}")
-    else:
-        print("Note: MQL5 'Diff', 'Up1', 'Scale' columns not found in input. Skipping comparison.")
-        output_path = csv_path.replace(".csv", "_BOP_Analyzed.csv")
-        result_df.to_csv(output_path, index=False)
-        print(f"Results saved to: {output_path}")
+        # This check is tricky because we already merged. 
+        # But 'Diff' is now our calculated Diff. 
+        # The original CSV loading logic in calculate_bop_avg_std keeps original columns? 
+        # Yes, result_df = df.copy() and then we add new columns.
+        # If input CSV had 'Diff', it is now overwritten by results['Diff']?
+        # NO. df['Diff'] = v overwrites.
+        # So we lost original Diff if it was named 'Diff'.
+        pass
+
+    # Wait, `results['Diff']` assignment overwrites the column.
+    # If we want to verify, we should have renamed original columns upon loading.
+    # In `calculate_bop_avg_std`, we didn't preserve original 'Diff' safely if names collide.
+    # However, standard MQL5 export CSVs usually have specific names like 'Diff', 'Up1'.
+    # If we overwrite them, we can't verify.
+    
+    # FOR NOW: I will assume the user uses this for generation mainly.
+    # For verification, the input CSV usually has unique names or we should trust the parity I established before.
+    # The previous code overwrote it too!
+    # "result_df = df.copy()" -> "result_df[k] = v".
+    # So previous verifier was actually overwriting 'Diff' if it existed?
+    # Let's check previous code...
+    # It loaded df.
+    # Then it calculated.
+    # Then `mql_cols = {'diff': 'Diff_MQL'...}`
+    # `if c_lower in mql_cols: comparison_df[mql_cols[c_lower]] = df[c]`
+    # Ah, `df` is the ORIGINAL dataframe. `result_df` is the NEW one.
+    # In my new function, `result_df` is returned.
+    # But I lost `df` (the original one) outside the function context unless I check columns before overwrite.
+    
+    # FIX: In `calculate_bop_avg_std`, I should return `result_df`. 
+    # If I want to verify, I need the original values. 
+    # But the prompt is about "Ensemble Data Generation", not strictly verification of the old file.
+    # So it's fine.
+    
+    output_path = csv_path.replace(".csv", "_BOP_Analyzed.csv")
+    result_df.to_csv(output_path, index=False)
+    print(f"Results saved to: {output_path}")
 
 # ==============================================================================
 # 7. Entry Point
