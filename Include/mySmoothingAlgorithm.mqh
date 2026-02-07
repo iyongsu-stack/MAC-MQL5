@@ -344,7 +344,7 @@ bool isNewBar(string sym)
    return (false);
 }
 
-//// 값이 달라짐=사용불가: average Class of array
+// 개선된 평균 클래스 (Drift 보정 포함)
 class HiAverage
 {
 private:
@@ -356,87 +356,84 @@ private:
    int    m_last_bar;    // 이전에 입력받은 bar 값
    double m_last_mean;   // 마지막으로 계산된 평균값
    int    m_last_index;  // 마지막으로 쓴 위치 인덱스
-//   double m_sum_sq;      // 제곱합 유지
 
 public:
-   // 생성자
+   // 생성자: 안전한 크기 검증 추가
    HiAverage(int window_size)
    {
-      m_size = window_size;
+      m_size = (window_size < 1) ? 1 : window_size; // 최소 1로 강제
       ArrayResize(m_buffer, m_size);
-      ArrayInitialize(m_buffer, 0.);
       Reset();
    }
 
    void Reset()
    {
-      
+      ArrayInitialize(m_buffer, 0.0); // 버퍼 명시적 클리어
       m_index = 0;
       m_count = 0;
-      m_sum = 0;
+      m_sum = 0.0;
       m_last_bar = -1;
-      m_last_mean = 0;
+      m_last_mean = 0.0;
       m_last_index = 0;
-//      m_sum_sq = 0;
    }
 
-   // 데이터 추가 및 계산 (매 분마다 호출)
+   // 데이터 추가 및 계산 (매 분/틱마다 호출)
    double Calculate(int bar, double price)
    {
-      // bar 값이 이전보다 크면 기존 로직 실행
+      // [Case 1] 새로운 Bar가 형성되었을 때
       if(bar > m_last_bar)
       {
-         // 1. 오래된 데이터 제거 (버퍼가 꽉 찼을 때만)
+         // 1. 오래된 데이터 제거 (버퍼가 꽉 찼을 때)
          if(m_count >= m_size)
          {
             double old_val = m_buffer[m_index];
             m_sum -= old_val;
-//            m_sum_sq -= (old_val * old_val);
          }
-         else m_count++;
+         else 
+         {
+            m_count++;
+         }
 
          // 2. 새 데이터 추가
          m_buffer[m_index] = price;
          m_sum += price;
-//         m_sum_sq += (price * price);
 
-         // 3. 마지막으로 쓴 위치 저장
+         // 3. 인덱스 관리
          m_last_index = m_index;
-
-         // 4. 인덱스 순환
-         m_index = (m_index + 1) % m_size;
-
-         // 4. 평균 계산 (O(1))
-         if(m_count < 2) 
+         
+         // [보정 로직] 인덱스가 0으로 돌아올 때마다(한 바퀴) 합계 재계산 (Drift 방지)
+         if(m_index == 0 && m_count > 0)
          {
-            m_last_bar = bar;
-            m_last_mean = 0;
-            return 0;
+             double recalculate_sum = 0.0;
+             for(int i = 0; i < m_count; i++) recalculate_sum += m_buffer[i];
+             m_sum = recalculate_sum;
          }
          
-         m_last_mean = m_sum / m_count;
-         m_last_bar = bar;
-//         double variance = (m_sum_sq / m_count) - (mean * mean);
-//         double variance = (m_sum_sq / m_count);
-         return m_last_mean;
-//         return MathSqrt(MathMax(0, variance));
-      }
-      else
-      {
-         // bar 값이 같거나 작으면 price만 업데이트하고 이전 평균 반환
-         // (버퍼의 마지막 위치에 price만 업데이트하고 합계도 조정)
+         m_index = (m_index + 1) % m_size;
+
+         // 4. 평균 계산 (1개 이상이면 바로 계산)
          if(m_count > 0)
          {
-            // 마지막으로 쓴 위치의 price만 업데이트
+            m_last_mean = m_sum / m_count;
+         }
+         
+         m_last_bar = bar;
+         return m_last_mean;
+      }
+      // [Case 2] 현재 Bar 내에서의 틱 업데이트 (Refresh)
+      else
+      {
+         if(m_count > 0)
+         {
+            // 마지막으로 쓴 위치의 price만 교체
             double old_price = m_buffer[m_last_index];
             m_buffer[m_last_index] = price;
-            // 합계도 조정 (변화된 price만 반영)
-            m_sum = m_sum - old_price + price;
+            
+            // 합계 조정 (변화량만큼만 반영)
+            m_sum = (m_sum - old_price) + price;
+            
             // 평균 재계산
-            if(m_count >= 2)
-            {
-               m_last_mean = m_sum / m_count;
-            }
+            m_last_mean = m_sum / m_count;
          }
          return m_last_mean;
       }
@@ -455,88 +452,93 @@ private:
    double m_last_stdValue; // 마지막으로 계산된 표준편차값
    int    m_last_index;  // 마지막으로 쓴 위치 인덱스
    
-//   double m_sum;         // 합계 유지
    double m_sum_sq;      // 절대값 제곱합 유지
 
 public:
    // 생성자
    HiStdDev1(int window_size)
    {
-      m_size = window_size;
+      m_size = (window_size < 1) ? 1 : window_size;
       ArrayResize(m_buffer, m_size);
-      ArrayInitialize(m_buffer, 0.);
       Reset();
    }
 
    void Reset()
    {
+      ArrayInitialize(m_buffer, 0.0);
       m_index = 0;
       m_count = 0;
       m_last_bar = -1;
       m_last_stdValue = 0;
       m_last_index = 0;
-//      m_sum = 0;
       m_sum_sq = 0;
    }
 
    // 데이터 추가 및 계산 (매 분마다 호출)
    double Calculate(int bar, double avg_price, double price)
    {
-      // bar 값이 이전보다 크면 기존 로직 실행
+      // [Case 1] 새로운 Bar가 형성되었을 때
       if(bar > m_last_bar)
       {
          // 1. 오래된 데이터 제거 (버퍼가 꽉 찼을 때만)
          if(m_count >= m_size)
          {
             double old_val = m_buffer[m_index];
-//            m_sum -= old_val;
             m_sum_sq -= old_val;
          }
          else m_count++;
 
          // 2. 새 데이터 추가
-         double temp_val = (price-avg_price)*(price-avg_price);
+         double diff = price - avg_price;
+         double temp_val = diff * diff;
          m_buffer[m_index] = temp_val;
-//         m_sum += price;
          m_sum_sq += temp_val;
 
          // 3. 마지막으로 쓴 위치 저장
          m_last_index = m_index;
 
+         // [보정 로직] Drift 방지
+         if(m_index == 0 && m_count > 0)
+         {
+             double recal_sum_sq = 0.0;
+             for(int i=0; i<m_count; i++) recal_sum_sq += m_buffer[i];
+             m_sum_sq = recal_sum_sq;
+         }
+
          // 4. 인덱스 순환
          m_index = (m_index + 1) % m_size;
 
          // 5. 표준편차 계산
-         if(m_count < 2) 
+         if(m_count < 1) 
          {
             m_last_bar = bar;
             m_last_stdValue = 0;
             return 0;
          }
          
-//         double mean = m_sum / m_count;
-//         double variance = (m_sum_sq / m_count) - (mean * mean);
-         m_last_stdValue = MathSqrt(m_sum_sq / m_count);
+         double var = m_sum_sq / m_count;
+         m_last_stdValue = MathSqrt(MathMax(0.0, var)); // 음수 방지
          m_last_bar = bar;
          return m_last_stdValue;
       }
+      // [Case 2] 현재 Bar 내에서의 틱 업데이트
       else
       {
-         // bar 값이 같거나 작으면 price만 업데이트하고 이전 표준편차 반환
-         // (버퍼의 마지막 위치에 price만 업데이트하고 합계도 조정, 입력된 avg_price 사용)
          if(m_count > 0)
          {
             // 마지막으로 쓴 위치의 값만 업데이트 (입력된 avg_price 사용)
             double old_val = m_buffer[m_last_index];
-            double temp_val = (price-avg_price)*(price-avg_price);
+            double diff = price - avg_price;
+            double temp_val = diff * diff;
+            
             m_buffer[m_last_index] = temp_val;
-            // 합계도 조정 (변화된 값만 반영)
+            
+            // 합계도 조정
             m_sum_sq = m_sum_sq - old_val + temp_val;
+            
             // 표준편차 재계산
-            if(m_count >= 2)
-            {
-               m_last_stdValue = MathSqrt(m_sum_sq / m_count);
-            }
+            double var = m_sum_sq / m_count;
+            m_last_stdValue = MathSqrt(MathMax(0.0, var));
          }
          return m_last_stdValue;
       }
@@ -556,70 +558,68 @@ private:
    double m_last_stdValue; // 마지막으로 계산된 표준편차값
    int    m_last_index;  // 마지막으로 쓴 위치 인덱스
    
-//   double m_sum;         // 합계 유지
    double m_sum_sq;      // 기호가진 제곱합 유지
 
 public:
    // 생성자
    HiStdDev2(int window_size)
    {
-      m_size = window_size;
+      m_size = (window_size < 1) ? 1 : window_size;
       ArrayResize(m_buffer, m_size);
-      ArrayInitialize(m_buffer, 0.);
       Reset();
    }
 
    void Reset()
    {
+      ArrayInitialize(m_buffer, 0.0);
       m_index = 0;
       m_count = 0;
       m_last_bar = -1;
       m_last_stdValue = 0;
       m_last_index = 0;
-//      m_sum = 0;
       m_sum_sq = 0;
    }
 
    // 데이터 추가 및 계산 (매 분마다 호출)
    double Calculate(int bar, double avg_price, double price)
    {
-      // bar 값이 이전보다 크면 기존 로직 실행
       if(bar > m_last_bar)
       {
-         // 1. 오래된 데이터 제거 (버퍼가 꽉 찼을 때만)
          if(m_count >= m_size)
          {
             double old_val = m_buffer[m_index];
-//            m_sum -= old_val;
             m_sum_sq -= old_val;
          }
          else m_count++;
 
-         // 2. 새 데이터 추가
-         double temp_val = (price-avg_price)*MathAbs(price-avg_price);
+         double diff = price - avg_price;
+         double temp_val = diff * MathAbs(diff); // Signed Square
          m_buffer[m_index] = temp_val;
-//         m_sum += price;
          m_sum_sq += temp_val;
 
-         // 3. 마지막으로 쓴 위치 저장
          m_last_index = m_index;
 
-         // 4. 인덱스 순환
+         // [보정 로직] Drift 방지
+         if(m_index == 0 && m_count > 0)
+         {
+             double recal_sum_sq = 0.0;
+             for(int i=0; i<m_count; i++) recal_sum_sq += m_buffer[i];
+             m_sum_sq = recal_sum_sq;
+         }
+
          m_index = (m_index + 1) % m_size;
 
-         // 5. 기호가진 표준편차 계산
-         if(m_count < 2) 
+         if(m_count < 1) 
          {
             m_last_bar = bar;
             m_last_stdValue = 0;
             return 0;
          }
          
-//         double mean = m_sum / m_count;
-//         double variance = (m_sum_sq / m_count) - (mean * mean);
+         double avg_sq = m_sum_sq / m_count;
          double stdValue = 0.;
-         if(m_sum_sq < 0.) stdValue = -1.*MathSqrt(MathAbs(m_sum_sq / m_count));
-         else stdValue = MathSqrt(MathAbs(m_sum_sq / m_count));
+         if(avg_sq < 0.) stdValue = -1.0 * MathSqrt(MathAbs(avg_sq));
+         else stdValue = MathSqrt(avg_sq);
 
          m_last_stdValue = stdValue;
          m_last_bar = bar;
@@ -627,24 +627,21 @@ public:
       }
       else
       {
-         // bar 값이 같거나 작으면 price만 업데이트하고 이전 표준편차 반환
-         // (버퍼의 마지막 위치에 price만 업데이트하고 합계도 조정, 입력된 avg_price 사용)
          if(m_count > 0)
          {
-            // 마지막으로 쓴 위치의 값만 업데이트 (입력된 avg_price 사용)
             double old_val = m_buffer[m_last_index];
-            double temp_val = (price-avg_price)*MathAbs(price-avg_price);
+            double diff = price - avg_price;
+            double temp_val = diff * MathAbs(diff);
+            
             m_buffer[m_last_index] = temp_val;
-            // 합계도 조정 (변화된 값만 반영)
             m_sum_sq = m_sum_sq - old_val + temp_val;
-            // 표준편차 재계산
-            if(m_count >= 2)
-            {
-               double stdValue = 0.;
-               if(m_sum_sq < 0.) stdValue = -1.*MathSqrt(MathAbs(m_sum_sq / m_count));
-               else stdValue = MathSqrt(MathAbs(m_sum_sq / m_count));
-               m_last_stdValue = stdValue;
-            }
+            
+            double avg_sq = m_sum_sq / m_count;
+            double stdValue = 0.;
+            if(avg_sq < 0.) stdValue = -1.0 * MathSqrt(MathAbs(avg_sq));
+            else stdValue = MathSqrt(avg_sq);
+            
+            m_last_stdValue = stdValue;
          }
          return m_last_stdValue;
       }
@@ -655,7 +652,7 @@ public:
 class HiStdDev3
 {
 private:
-   double m_buffer[];    // 데이터를 담을 순환 버퍼
+   double m_buffer[];    // 데이터를 담을 순환 버퍼 (제곱값 저장)
    int    m_size;        // 윈도우 크기 (5000)
    int    m_index;       // 현재 쓰기 위치 포인터
    int    m_count;       // 현재까지 쌓인 데이터 수
@@ -663,88 +660,81 @@ private:
    double m_last_stdValue; // 마지막으로 계산된 표준편차값
    int    m_last_index;  // 마지막으로 쓴 위치 인덱스
    
-//   double m_sum;         // 합계 유지
    double m_sum_sq;      // 제곱합 유지
 
 public:
    // 생성자
    HiStdDev3(int window_size)
    {
-      m_size = window_size;
+      m_size = (window_size < 1) ? 1 : window_size;
       ArrayResize(m_buffer, m_size);
-      ArrayInitialize(m_buffer, 0.);
       Reset();
    }
 
    void Reset()
    {
+      ArrayInitialize(m_buffer, 0.0);
       m_index = 0;
       m_count = 0;
       m_last_bar = -1;
       m_last_stdValue = 0;
       m_last_index = 0;
-//      m_sum = 0;
       m_sum_sq = 0;
    }
 
    // 데이터 추가 및 계산 (매 분마다 호출)
    double Calculate(int bar, double price)
    {
-      // bar 값이 이전보다 크면 기존 로직 실행
+      double sq_price = price * price;
+
       if(bar > m_last_bar)
       {
-         // 1. 오래된 데이터 제거 (버퍼가 꽉 찼을 때만)
          if(m_count >= m_size)
          {
-            double old_val = m_buffer[m_index];
-//            m_sum -= old_val;
-            m_sum_sq -= (old_val * old_val);
+            double old_sq_val = m_buffer[m_index];
+            m_sum_sq -= old_sq_val;
          }
          else m_count++;
 
-         // 2. 새 데이터 추가
-         m_buffer[m_index] = price;
-//         m_sum += price;
-         m_sum_sq += (price * price);
+         m_buffer[m_index] = sq_price;
+         m_sum_sq += sq_price;
 
-         // 3. 마지막으로 쓴 위치 저장
          m_last_index = m_index;
 
-         // 4. 인덱스 순환
+         // [보정 로직] Drift 방지
+         if(m_index == 0 && m_count > 0)
+         {
+             double recal_sum_sq = 0.0;
+             for(int i=0; i<m_count; i++) recal_sum_sq += m_buffer[i];
+             m_sum_sq = recal_sum_sq;
+         }
+
          m_index = (m_index + 1) % m_size;
 
-         // 5. 표준편차 공식 적용 (O(1))
-         if(m_count < 2) 
+         if(m_count < 1) 
          {
             m_last_bar = bar;
             m_last_stdValue = 0;
             return 0;
          }
          
-//         double mean = m_sum / m_count;
-//         double variance = (m_sum_sq / m_count) - (mean * mean);
-         double variance = (m_sum_sq / m_count);
-         m_last_stdValue = MathSqrt(MathMax(0, variance));
+         double variance = m_sum_sq / m_count;
+         m_last_stdValue = MathSqrt(MathMax(0.0, variance));
          m_last_bar = bar;
          return m_last_stdValue;
       }
       else
       {
-         // bar 값이 같거나 작으면 price만 업데이트하고 이전 표준편차 반환
-         // (버퍼의 마지막 위치에 price만 업데이트하고 합계도 조정)
          if(m_count > 0)
          {
-            // 마지막으로 쓴 위치의 price만 업데이트
-            double old_price = m_buffer[m_last_index];
-            m_buffer[m_last_index] = price;
-            // 합계도 조정 (변화된 price만 반영)
-            m_sum_sq = m_sum_sq - (old_price * old_price) + (price * price);
-            // 표준편차 재계산
-            if(m_count >= 2)
-            {
-               double variance = (m_sum_sq / m_count);
-               m_last_stdValue = MathSqrt(MathMax(0, variance));
-            }
+            // 마지막으로 쓴 위치 업데이트
+            double old_sq_val = m_buffer[m_last_index];
+            m_buffer[m_last_index] = sq_price;
+            
+            m_sum_sq = m_sum_sq - old_sq_val + sq_price;
+            
+            double variance = m_sum_sq / m_count;
+            m_last_stdValue = MathSqrt(MathMax(0.0, variance));
          }
          return m_last_stdValue;
       }

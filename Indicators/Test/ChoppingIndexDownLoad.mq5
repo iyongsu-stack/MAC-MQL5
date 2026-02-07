@@ -9,7 +9,7 @@
 #property description "Choppiness index - JMA smoothed"
 //------------------------------------------------------------------
 #property indicator_separate_window
-#property indicator_buffers 5
+#property indicator_buffers 6
 #property indicator_plots   4
 
 #property indicator_type1   DRAW_LINE
@@ -47,7 +47,9 @@ input double inpSmoothPhase  = 0;   // Smooth phase
 HiAverage *iAverage;
 HiStdDev1 *iStdDev1;
 
-double avgVal[], stdPVal[], stdMVal[], csi[], csic[];
+double avgVal[], stdPVal[], stdMVal[], csi[], csic[], choppingScale[];
+
+bool g_IsWritten = false; // 파일 작성 여부 확인용 플래그
 
 //------------------------------------------------------------------
 // Custom indicator initialization function
@@ -59,6 +61,10 @@ int OnInit()
    SetIndexBuffer(2, stdMVal, INDICATOR_DATA);
    SetIndexBuffer(3, csi,    INDICATOR_DATA);
    SetIndexBuffer(4, csic,   INDICATOR_COLOR_INDEX);
+   
+   // [Fix] choppingScale 버퍼 할당 추가 (INDICATOR_CALCULATIONS)
+   // SetIndexBuffer를 하지 않으면 메모리 할당이 안 되어 Array Out of Range 발생
+   SetIndexBuffer(5, choppingScale, INDICATOR_CALCULATIONS);
 
    IndicatorSetString(INDICATOR_SHORTNAME, "Jma smoothed Choppiness index (" + string(inpChoPeriod) + "," + string(inpSmoothPeriod) + ")");
 
@@ -107,6 +113,7 @@ int OnCalculate(const int rates_total,
       ArrayInitialize(stdMVal, 0.0);
       ArrayInitialize(csi, 0.0);
       ArrayInitialize(csic, 0.0);
+      ArrayInitialize(choppingScale, 0.0);
 
       // 객체 상태 초기화 (재생성)
       if(CheckPointer(iAverage) == POINTER_DYNAMIC) delete iAverage;
@@ -145,13 +152,51 @@ int OnCalculate(const int rates_total,
       // 평균 및 표준편차 밴드 계산
       if(CheckPointer(iAverage) != POINTER_INVALID && CheckPointer(iStdDev1) != POINTER_INVALID)
       {
+
          avgVal[i] = iAverage.Calculate(i, csi[i]);
          double std = iStdDev1.Calculate(i, avgVal[i], csi[i]);
 
          stdPVal[i] = avgVal[i] + std;
          stdMVal[i] = avgVal[i] - std;
+
+         if(std != 0.)  
+         {
+             choppingScale[i] = (csi[i]-avgVal[i])/std;
+         }
+         else 
+         {
+             // [Fix] i=0 일 때 i-1 참조 안전장치 추가
+             if(i > 0) choppingScale[i] = choppingScale[i-1];
+             else choppingScale[i] = 0.0;
+         }
       }
    }
    
+   
+   // --- File Writing Logic ---
+   if(rates_total > 0 && !g_IsWritten) 
+   {
+      string filename = "ChoppingIndex_DownLoad.csv";
+      int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
+      
+      if(handle != INVALID_HANDLE) 
+      {
+         FileWrite(handle, "Time", "Open", "Close", "High", "Low", "CSI", "Average", "ChoppingScale");
+         
+         for(int k=0; k<rates_total; k++) 
+         {
+            string timeStr = TimeToString(time[k], TIME_DATE|TIME_MINUTES);
+            FileWrite(handle, timeStr, open[k], close[k], high[k], low[k], csi[k], avgVal[k], choppingScale[k]);
+         }
+         FileClose(handle);
+         Print("Data download complete: ", filename);
+         g_IsWritten = true;
+      } 
+      else 
+      {
+         Print("Failed to open file for writing: ", filename, " Error: ", GetLastError());
+      }
+   }
+
    return(rates_total);
 }
