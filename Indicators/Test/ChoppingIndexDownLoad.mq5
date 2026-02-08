@@ -102,7 +102,8 @@ int OnCalculate(const int rates_total,
                 const long& volume[],
                 const int& spread[])
 {
-   if(Bars(_Symbol, _Period) < rates_total) return(-1);
+   Print("OnCalculate Start: rates_total=", rates_total, " prev_calculated=", prev_calculated);
+   if(Bars(_Symbol, _Period) < rates_total) { Print("Error: Bars < rates_total"); return(-1); }
    
    // 초기화 로직: 처음 시작하거나 데이터 갱신 시
    if(prev_calculated > rates_total || prev_calculated <= 0)
@@ -114,6 +115,8 @@ int OnCalculate(const int rates_total,
       ArrayInitialize(csi, 0.0);
       ArrayInitialize(csic, 0.0);
       ArrayInitialize(choppingScale, 0.0);
+      
+      g_IsWritten = false; // [Fix] 초기화 시 파일 쓰기 플래그 리셋 (재다운로드 가능하게 함)
 
       // 객체 상태 초기화 (재생성)
       if(CheckPointer(iAverage) == POINTER_DYNAMIC) delete iAverage;
@@ -174,6 +177,7 @@ int OnCalculate(const int rates_total,
    
    
    // --- File Writing Logic ---
+   Print("Check Write: rates_total=", rates_total, " g_IsWritten=", g_IsWritten);
    if(rates_total > 0 && !g_IsWritten) 
    {
       string filename = "ChoppingIndex_DownLoad.csv";
