@@ -246,8 +246,8 @@ def iWma(index, period, series):
     """
     Weighted Moving Average
     """
-    if index < period - 1:
-        return 0.0
+    # if index < period - 1:
+    #    return 0.0
         
     sum_val = 0.0
     weight_total = 0.0
@@ -319,43 +319,30 @@ def calculate_bsp_wma_smooth(input_data, wma_period=10, smooth_period=3):
     WmaBuyRatio = np.zeros(rates_total)
     WmaSellRatio = np.zeros(rates_total)
     DiffRatio = np.zeros(rates_total)
-    SmoothDiffRatio = np.zeros(rates_total)
+    SmoothDiffRatio = np.zeros(rates_total) # Still useful if we want to revert, but mainly we need:
+    SmoothBuyRatio = np.zeros(rates_total)
+    SmoothSellRatio = np.zeros(rates_total)
+    WmaDiffRatio = np.zeros(rates_total)
     
-    # Initialize Custom Smoother
-    smoother = SmoothFilter(smooth_period, 0) # Phase 0
+    # Initialize Custom Smoothers (Two instances for Buy and Sell)
+    smootherBuy = SmoothFilter(smooth_period, 0)
+    smootherSell = SmoothFilter(smooth_period, 0)
     
     last_SumBuy = 0.0
     last_SumSell = 0.0
     
-    # Loop
-    # Note: Using iterrows is slow, but consistent with original logic for now.
-    # Optimization: Convert to numpy loop
     opens = df['Open'].values
     highs = df['High'].values
     lows = df['Low'].values
     closes = df['Close'].values
     
-    # Pre-calculate prev closes for speed matching previous logic
-    # Original logic used row-by-row with prev_row
-    # Let's stick to the exact logic of the original scalar function for safety
-    # but adapt to loop over indices
-    
     for bar in range(rates_total):
-        # Construct row dicts on fly or just pass values?
-        # The helper functions take 'row' (Series). Creating Series each time is slow.
-        # But for correctness let's mock the row object if needed or just fetch values.
-        
-        # Original: tempBuyRatio = CalculateBuyRatio(row, prev_row)
-        # Helper expects row['Open'] etc.
-        # Let's just create a simple dict/object to pass to helpers to avoid refactoring helpers too much
-        # OR better, refactor loop to extract values before calling.
-        
-        # Let's assume standard index access
+        # Construct row access
         curr_row = {'Open': opens[bar], 'High': highs[bar], 'Low': lows[bar], 'Close': closes[bar]}
         prev_row = None
         if bar > 0:
-            prev_row = {'Close': closes[bar-1]} # Helpers only use Close from prev_row
-            
+            prev_row = {'Close': closes[bar-1]}
+
         # 1. Calc Buy/Sell Ratio
         tempBuyRatio = CalculateBuyRatio(curr_row, prev_row)
         tempSellRatio = CalculateSellRatio(curr_row, prev_row)
@@ -367,17 +354,21 @@ def calculate_bsp_wma_smooth(input_data, wma_period=10, smooth_period=3):
         last_SumBuy = SumBuyRatio[bar]
         last_SumSell = SumSellRatio[bar]
         
-        # 3. WMA
+        # 3. WMA (MQL5: WMA Sums first)
         WmaBuyRatio[bar] = iWma(bar, wma_period, SumBuyRatio)
         WmaSellRatio[bar] = iWma(bar, wma_period, SumSellRatio)
         
-        # 4. Diff
+        # 4. Diff (Diff of WMA)
         DiffRatio[bar] = WmaBuyRatio[bar] - WmaSellRatio[bar]
         
-        # 5. Smooth
-        SmoothDiffRatio[bar] = smoother.calculate(DiffRatio[bar], bar)
+        # 5. Smooth (Smooth of Diff)
+        # Note: We need a single smoother for the DiffRatio
+        # MQL5: SmoothDiffRatio[bar] = iSmooth(DiffRatio[bar],inpSmoothPeriod,0,bar,rates_total);
+        # So we use 'smootherBuy' as the main smoother (naming is arbitrary)
+        SmoothDiffRatio[bar] = smootherBuy.calculate(DiffRatio[bar], bar)
         
     # Add to DataFrame
+    # MQL5 Output Buffer 0 is SmoothDiffRatio
     df['MySmoothDiffRatio'] = SmoothDiffRatio
     
     return df

@@ -1,0 +1,3 @@
+[HistData] XAUUSD (2026년 2) 다운로드 시작... -> c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files
+https://www.histdata.com/download-free-forex-historical-data/?/ascii/1-minute-bar-quotes/xauusd/2026/2
+[오류] 발생: There is no token. Please make sure your year/month/pair is correct.Example is year=2016, month=7, pair=eurgbp

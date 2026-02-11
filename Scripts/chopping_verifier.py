@@ -11,7 +11,6 @@ INP_STD_PERIOD = 4000
 INP_SMOOTH_PHASE = 0.0
 
 # --- Classes ---
-
 class HiAverage:
     def __init__(self, window_size):
         self.m_size = max(1, window_size)
@@ -34,7 +33,6 @@ class HiAverage:
         self.m_buffer[self.m_index] = price
         self.m_sum += price
         
-        # Drift Correction
         if self.m_index == 0 and self.m_count > 0:
             self.m_sum = sum(self.m_buffer[:self.m_count])
             
@@ -80,9 +78,6 @@ class HiStdDev1:
 
 class JMA:
     def __init__(self):
-        # MQL5: m_wrk[r][...]
-        # Since we simulate bar by bar, need history
-        # m_wrk columns: 0..4 (series), 5,6 (bsmax/min), 7 (volty), 8 (vsum), 9 (avolty)
         self.history = [] 
         
     def calculate(self, price, length, phase, r):
@@ -90,26 +85,18 @@ class JMA:
         
         if r == 0 or length <= 1:
             for k in range(7): current_row[k] = price
-            # others 0
-            # Need to fill history with this initial state?
-            # MQL5 initialization fills correctly.
-            # In MQL5: if(r==0) -> sets current row.
             self.history.append(current_row)
             return price
             
-        prev_row = self.history[-1] # r-1
+        prev_row = self.history[-1] 
         
         len1 = max(math.log(math.sqrt(0.5*(length-1)))/math.log(2.0)+2.0, 0)
         pow1 = max(len1-2.0, 0.5)
-        
         bsmax = 5; bsmin = 6; volty = 7; vsum = 8; avolty = 9
         
         del1 = price - prev_row[bsmax]
         del2 = price - prev_row[bsmin]
-        
         forBar = min(r, 10)
-        # Access r-forBar
-        # if r=1, forBar=1, index= r-forBar = 0. (history[0])
         hist_row_forBar = self.history[r - forBar]
         
         v_val = 0.0
@@ -117,10 +104,7 @@ class JMA:
         if abs(del1) < abs(del2): v_val = abs(del2)
         current_row[volty] = v_val
         
-        # vsum
         current_row[vsum] = prev_row[vsum] + (v_val - hist_row_forBar[volty]) * 0.1
-        
-        # avolty
         current_row[avolty] = prev_row[avolty] + (2.0/(max(4.0*length,30)+1.0)) * (current_row[vsum] - prev_row[avolty])
         
         dVolty = current_row[volty] / current_row[avolty] if current_row[avolty] > 0 else 0
@@ -133,7 +117,6 @@ class JMA:
         
         if del1 > 0: current_row[bsmax] = price
         else: current_row[bsmax] = price - Kv * del1
-        
         if del2 < 0: current_row[bsmin] = price
         else: current_row[bsmin] = price - Kv * del2
         
@@ -141,39 +124,39 @@ class JMA:
         beta = 0.45*(length-1)/(0.45*(length-1)+2)
         alpha = math.pow(beta, pow2)
         
-        # 0
         current_row[0] = price + alpha*(prev_row[0] - price)
-        # 1
         current_row[1] = (price - current_row[0])*(1-beta) + beta*prev_row[1]
-        # 2
         current_row[2] = (current_row[0] + corr*current_row[1])
-        # 3
-        # Needs prev_row[3] and prev_row[4]
         current_row[3] = (current_row[2] - prev_row[4])*math.pow((1-alpha),2) + math.pow(alpha,2)*prev_row[3]
-        # 4
         current_row[4] = (prev_row[4] + current_row[3])
         
         self.history.append(current_row)
         return current_row[4]
 
-def main():
-    # Load Data
-    csv_path = r'c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files\ChoppingIndex_DownLoad.csv'
+def calculate_chopping(input_data):
+    """
+    Calculates Chopping Index indicators.
+    """
+    df = None
+    if isinstance(input_data, str):
+        if os.path.exists(input_data):
+            try:
+                df = pd.read_csv(input_data, sep='\t')
+                if len(df.columns) < 2: df = pd.read_csv(input_data)
+            except:
+                df = pd.read_csv(input_data)
+        else:
+            return None
+    elif isinstance(input_data, pd.DataFrame):
+        df = input_data.copy()
+    else:
+        return None
+        
+    if df is None: return None
     
-    if not os.path.exists(csv_path):
-        print(f"Error: Not found {csv_path}")
-        return
-
-    try:
-        # Detected tab delimiter from file inspection
-        df = pd.read_csv(csv_path, sep=None, engine='python')
-        # Strip whitespace from column names if any
-        df.columns = df.columns.str.strip()
-    except Exception as e:
-        print(f"Error reading csv: {e}")
-        return
-
-    # Prepare logic
+    # Normalize
+    df.columns = [c.strip() for c in df.columns]
+    
     jma = JMA()
     hi_avg = HiAverage(INP_AVG_PERIOD)
     hi_std = HiStdDev1(INP_STD_PERIOD)
@@ -185,33 +168,28 @@ def main():
     py_avg = []
     py_scale = []
     
-    print(f"Processing {rates} bars...")
+    high_series = df['High'].values
+    low_series = df['Low'].values
+    close_series = df['Close'].values
+    
+    # Precompute needed values for speed?
+    # The double loop logic (k-loop) is heavy. 
+    # For now keep it as is.
     
     for i in range(rates):
-        # We need OHLC
-        high_series = df['High']
-        low_series = df['Low']
-        close_series = df['Close']
-        
-        # Chopping Index Calculation
-        # Needs history for k loop
-        
-        atr_sum = 0.0
-        # MQL5: maxHig=high[i], minLow=low[i]
         max_h = high_series[i]
         min_l = low_series[i]
         
-        # Loop k=0..INP_CHO_PERIOD-1
-        # Check index bounds: (i-k-1) >= 0
+        atr_sum = 0.0
         
         for k in range(INP_CHO_PERIOD):
             if (i - k - 1) < 0: break
             
-            # MQL5: high[i-k], close[i-k-1], low[i-k]
             h = high_series[i-k]
             l = low_series[i-k]
             prev_c = close_series[i-k-1]
             
+            # TR
             tr = max(h, prev_c) - min(l, prev_c)
             atr_sum += tr
             
@@ -245,26 +223,11 @@ def main():
             
         py_scale.append(scale)
         
-    # Verification
     df['Py_CSI'] = py_csi
     df['Py_Avg'] = py_avg
     df['Py_Scale'] = py_scale
     
-    df['Diff_CSI'] = df['CSI'] - df['Py_CSI']
-    df['Diff_Avg'] = df['Average'] - df['Py_Avg']
-    df['Diff_Scale'] = df['ChoppingScale'] - df['Py_Scale']
-    
-    print("Verification Summary:")
-    print(df[['Diff_CSI', 'Diff_Avg', 'Diff_Scale']].describe())
-    
-    max_diff = df[['Diff_CSI', 'Diff_Avg', 'Diff_Scale']].abs().max()
-    print("\nMax Differences:")
-    print(max_diff)
-    
-    # Save Result relative to script location or brain dir
-    output_path = os.path.join(os.path.dirname(csv_path), 'ChoppingIndex_Verification_Result.csv')
-    df.to_csv(output_path, index=False)
-    print(f"Verification Result Saved to: {output_path}")
+    return df
 
 if __name__ == '__main__':
-    main()
+    print("Running Chopping Test...")

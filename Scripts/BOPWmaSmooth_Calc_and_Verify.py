@@ -3,59 +3,68 @@ import numpy as np
 import os
 import math
 
-# Use the faster calculation method from BOPAvgStd_Verifier.py
+# ==========================================
+# Helper Functions (Exact Match to myBSPCalculation.mqh)
+# ==========================================
+
+def CalculateBullsReward(curr_row):
+    high, low, open_p, close = curr_row['High'], curr_row['Low'], curr_row['Open'], curr_row['Close']
+    rng = high - low
+    if rng == 0: return 0.0
+    
+    # Logic from CalculateBullsReward in myBSPCalculation.mqh
+    # BullsRewardBasedOnOpen = (high - open) / range
+    reward_open = (high - open_p) / rng
+    
+    # BullsRewardBasedOnClose = (close - low) / range
+    reward_close = (close - low) / rng
+    
+    # BullsRewardBasedOnOpenClose = (close > open) ? (close - open) / range : 0
+    reward_oc = (close - open_p) / rng if close > open_p else 0.0
+    
+    return (reward_open + reward_close + reward_oc) / 3.0
+
+def CalculateBearsReward(curr_row):
+    high, low, open_p, close = curr_row['High'], curr_row['Low'], curr_row['Open'], curr_row['Close']
+    rng = high - low
+    if rng == 0: return 0.0
+    
+    # Logic from CalculateBearsReward in myBSPCalculation.mqh
+    # BearsRewardBasedOnOpen = (open - low) / range
+    reward_open = (open_p - low) / rng
+    
+    # BearsRewardBasedOnClose = (high - close) / range
+    reward_close = (high - close) / rng
+    
+    # BearsRewardBasedOnOpenClose = (close < open) ? (open - close) / range : 0
+    reward_oc = (open_p - close) / rng if close < open_p else 0.0
+    
+    return (reward_open + reward_close + reward_oc) / 3.0
+
 def calculate_bulls_reward_series(df):
+    n = len(df)
+    rewards = np.zeros(n)
     opens = df['Open'].values
     highs = df['High'].values
     lows = df['Low'].values
     closes = df['Close'].values
-    n = len(df)
-    rewards = np.zeros(n)
     
     for i in range(n):
-        O, H, L, C = opens[i], highs[i], lows[i], closes[i]
-        rng = H - L
-        if rng == 0:
-            rewards[i] = 0
-            continue
-            
-        reward_open = (H - O) / rng
-        reward_close = (C - L) / rng
-        
-        if C > O:
-            reward_oc = (C - O) / rng
-        else:
-            reward_oc = 0.0
-            
-        rewards[i] = (reward_open + reward_close + reward_oc) / 3.0
-        
+        curr_row = {'Open': opens[i], 'High': highs[i], 'Low': lows[i], 'Close': closes[i]}
+        rewards[i] = CalculateBullsReward(curr_row)
     return rewards
 
 def calculate_bears_reward_series(df):
+    n = len(df)
+    rewards = np.zeros(n)
     opens = df['Open'].values
     highs = df['High'].values
     lows = df['Low'].values
     closes = df['Close'].values
-    n = len(df)
-    rewards = np.zeros(n)
     
     for i in range(n):
-        O, H, L, C = opens[i], highs[i], lows[i], closes[i]
-        rng = H - L
-        if rng == 0:
-            rewards[i] = 0
-            continue
-            
-        reward_open = (O - L) / rng
-        reward_close = (H - C) / rng
-        
-        if C < O:
-            reward_oc = (O - C) / rng
-        else:
-            reward_oc = 0.0
-            
-        rewards[i] = (reward_open + reward_close + reward_oc) / 3.0
-        
+        curr_row = {'Open': opens[i], 'High': highs[i], 'Low': lows[i], 'Close': closes[i]}
+        rewards[i] = CalculateBearsReward(curr_row)
     return rewards
 
 def calculate_wma(data, period):

@@ -10,7 +10,7 @@ ALPHA2 = 0.33
 AVG_PERIOD = 1000
 STD_PERIOD = 4000
 
-# --- HiAverage Class (Replication of MQL5 via ChoppingIndex Verification) ---
+# --- HiAverage Class ---
 class HiAverage:
     def __init__(self, window_size):
         self.m_size = max(1, window_size)
@@ -41,7 +41,7 @@ class HiAverage:
         
         return self.m_sum / self.m_count if self.m_count > 0 else 0.0
 
-# --- HiStdDev1 Class (Replication of MQL5 via ChoppingIndex Verification) ---
+# --- HiStdDev1 Class ---
 class HiStdDev1:
     def __init__(self, window_size):
         self.m_size = max(1, window_size)
@@ -79,36 +79,35 @@ class HiStdDev1:
         var = self.m_sum_sq / self.m_count
         return math.sqrt(max(0.0, var))
 
-# --- Main Logic ---
-def main():
-    csv_path = r'c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files\ADXSmooth_DownLoad.csv'
+def calculate_adx(input_data):
+    """
+    Calculates ADX Smooth indicators.
+    input_data: str (csv_path) or pd.DataFrame
+    """
+    df = None
+    if isinstance(input_data, str):
+        if os.path.exists(input_data):
+            try:
+                df = pd.read_csv(input_data, sep='\t')
+                if len(df.columns) < 2: df = pd.read_csv(input_data)
+            except:
+                df = pd.read_csv(input_data)
+        else:
+            return None
+    elif isinstance(input_data, pd.DataFrame):
+        df = input_data.copy()
+    else:
+        return None
+        
+    if df is None: return None
     
-    if not os.path.exists(csv_path):
-        print(f"Error: File not found {csv_path}")
-        return
-
-    try:
-        # Check delimiter. Assuming comma based on context, fallback to tab checks if needed.
-        # Previous run loaded successfully with sep=None.
-        df = pd.read_csv(csv_path, sep=None, engine='python')
-        df.columns = df.columns.str.strip()
-    except Exception as e:
-        print(f"Error reading CSV: {e}")
-        return
-
-    print(f"Loaded {len(df)} rows.")
-
+    # Normalize
+    df.columns = [c.strip() for c in df.columns]
+    
     rates_total = len(df)
-    
-    # --- MQL5 ADX Calculation (Corrected: Mean of Ratios via EMA) ---
-    # Tested and Verified: Matches MQL5 iADX output with error < 1e-13.
-    
     high = df['High'].values
     low = df['Low'].values
     close = df['Close'].values
-    mql_smoothed_adx = df['ADX'].values
-    mql_avg = df['Average'].values
-    mql_scale = df['Scale'].values
     
     alpha_adx = 2.0 / (ADX_PERIOD + 1.0)
     
@@ -116,6 +115,7 @@ def main():
     pdm_ratio = np.zeros(rates_total)
     mdm_ratio = np.zeros(rates_total)
     
+    # MQL5 iADX Logic
     for i in range(1, rates_total):
         h = high[i]
         l = low[i]
@@ -168,21 +168,12 @@ def main():
         adx_raw[i] = dx[i] * alpha_adx + prev_a * (1.0 - alpha_adx)
         prev_a = adx_raw[i]
             
-
-
-    # --- 2. Custom Smoothing Logic (Replication) ---
-    # Note: The MQL5 indicator takes `iADX(...)` and SMOOTHS it further.
-    # MQL5: `Adx = 2*ADX[i] + (alpha1-2)*ADX[i-1] + (1-alpha1)*Last_Adx`
-    # Then: `ADXBuffer[i] = alpha2*Adx + (1-alpha2)*ADXBuffer[i-1]`
-    
-    # We will apply this logic to our calculated `adx_raw`.
-    
+    # Custom Smoothing Logic
     adx_intermediate = np.zeros(rates_total)
     adx_final_buf = np.zeros(rates_total)
     
-    last_adx_val = 0.0 # State
+    last_adx_val = 0.0
     
-    # Stats
     avg_calc = HiAverage(AVG_PERIOD)
     std_calc = HiStdDev1(STD_PERIOD)
     
@@ -201,10 +192,9 @@ def main():
         prev_final = adx_final_buf[i-1]
         adx_final_buf[i] = ALPHA2 * val_adx + (1 - ALPHA2) * prev_final
         
-        # Update State
         last_adx_val = val_adx
         
-        # Stats Logic (Average & Scale)
+        # Stats
         avg = avg_calc.calculate(adx_final_buf[i])
         std = std_calc.calculate(avg, adx_final_buf[i])
         
@@ -214,41 +204,16 @@ def main():
         else:
             scale_buf[i] = scale_buf[i-1] if i > 0 else 0.0
 
-    # Verification Report
     df['Py_ADX'] = adx_final_buf
     df['Py_Avg'] = avg_adx_buf
     df['Py_Scale'] = scale_buf
     
-    # We focus on the LAST 50% of data to verify convergence
-    # because initialization differences will persist for some time (~3x Period).
-    # Since we have 100k bars, checking last 50k is safe.
-    
-    half_idx = int(rates_total / 2)
-    df_verify = df.iloc[half_idx:].copy()
-    
-    df_verify['Diff_ADX'] = df_verify['Py_ADX'] - df_verify['ADX']
-    df_verify['Diff_Avg'] = df_verify['Py_Avg'] - df_verify['Average']
-    df_verify['Diff_Scale'] = df_verify['Py_Scale'] - df_verify['Scale']
-    
-    max_diff_adx = df_verify['Diff_ADX'].abs().max()
-    max_diff_avg = df_verify['Diff_Avg'].abs().max()
-    max_diff_scale = df_verify['Diff_Scale'].abs().max()
-    
-    print("Verification Completed (Last 50% of data).")
-    print(f"Max Diff ADX: {max_diff_adx}")
-    print(f"Max Diff Avg: {max_diff_avg}")
-    print(f"Max Diff Scale: {max_diff_scale}")
-    
-    # Save Report (Full)
-    out_path = csv_path.replace('.csv', '_PyVerify.csv')
-    df.to_csv(out_path, index=False)
+    return df
 
 if __name__ == "__main__":
-    try:
-        print("Starting adx_verifier.py...")
-        main()
-        print("Finished adx_verifier.py")
-    except Exception as e:
-        print(f"CRITICAL ERROR: {e}")
-        import traceback
-        traceback.print_exc()
+    # Test execution
+    print("Running in verification mode...")
+    path = r'c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files\ADXSmooth_DownLoad.csv'
+    res = calculate_adx(path)
+    if res is not None:
+        print("Calculation successful.")

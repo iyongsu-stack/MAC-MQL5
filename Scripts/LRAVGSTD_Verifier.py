@@ -231,12 +231,18 @@ def my_average(arr, k, period):
         s += arr[i]
     return s / period
 
-def is_std_calc_time(time_str):
+def is_std_calc_time(time_val):
     try:
-        dt = datetime.strptime(time_str, "%Y.%m.%d %H:%M")
+        if isinstance(time_val, str):
+            dt = datetime.strptime(time_val, "%Y.%m.%d %H:%M")
+        else:
+            # Assume it's a datetime object or pandas Timestamp
+            dt = time_val
+            
         curr_min = dt.hour * 60 + dt.minute
         start_min = STD_CALC_START_HOUR * 60 + STD_CALC_START_MINUTE
         end_min = STD_CALC_END_HOUR * 60 + STD_CALC_END_MINUTE
+        
         if start_min < end_min:
             return start_min <= curr_min < end_min
         else:
