@@ -1,0 +1,26 @@
+{
+   "Best_Params": {
+      "LRA_AvgPeriod": 28,
+      "BOP_AvgPeriod": 50,
+      "BOP_SmoothPeriod": 60,
+      "ADX_Period": 28,
+      "TDI_RSI_Period": 28,
+      "TDI_VolBand_Period": 35,
+      "TDI_RSI_Smooth": 2,
+      "TDI_Sig_Smooth": 17,
+      "QQE_SF": 45,
+      "QQE_RSI_Period": 30,
+      "CHV_SmoothPeriod": 130,
+      "CHV_Period": 74,
+      "ATR_Period": 24,
+      "Chop_Period": 90,
+      "W_LRA": 1.0924614496213583,
+      "W_BOP": -0.8046175627894444,
+      "W_QQE": -0.14450098896456365,
+      "W_TDI": -2.4179556483720743,
+      "W_CHV": 1.9698050962106577,
+      "W_CSI": -1.4133499427342936,
+      "Filter_ADX": 40.57405142695038,
+      "Threshold_Score": 9.087991475433109
+   }
+}

@@ -1,0 +1,46 @@
+{
+    "Strategy_Structure": {
+        "LRA_S": true,
+        "LRA_L": true,
+        "BOP": true,
+        "QQE": true,
+        "TDI": true,
+        "CHV": true,
+        "CSI": true
+    },
+    "Weights": {
+        "Use_LRA_S": true,
+        "Use_LRA_L": true,
+        "Use_BOP": true,
+        "Use_QQE": true,
+        "Use_TDI": true,
+        "Use_CHV": true,
+        "Use_CSI": true,
+        "Threshold": 9.98095250540759,
+        "Filter_ADX": 39.62863963744121,
+        "W_LRA_S": -2.993268023764029,
+        "W_LRA_L": 2.0526484902283384,
+        "W_BOP": 1.5889425271790039,
+        "W_QQE": 1.8210705691873992,
+        "W_TDI": -1.2313061749193883,
+        "W_CHV": 1.4331461086976518,
+        "W_CSI": -0.6546116143393174
+    },
+    "Metrics": {
+        "WR_Train": 80.0,
+        "PF_Train": 4.0,
+        "Trades_Train": 25,
+        "WR_Test": 81.48148148148148,
+        "PF_Test": 4.4,
+        "Trades_Test": 27,
+        "Struct": {
+            "LRA_S": true,
+            "LRA_L": true,
+            "BOP": true,
+            "QQE": true,
+            "TDI": true,
+            "CHV": true,
+            "CSI": true
+        }
+    }
+}

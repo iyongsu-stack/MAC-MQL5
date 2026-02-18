@@ -1,0 +1,25 @@
+{
+    "Best_Params": {
+        "LRA_AvgPeriod": 170,
+        "BOP_AvgPeriod": 90,
+        "BOP_SmoothPeriod": 90,
+        "ADX_Period": 28,
+        "TDI_RSI_Period": 30,
+        "CHV_SmoothPeriod": 140,
+        "CHV_Period": 100,
+        "W_LRA_S": 0.644984686179582,
+        "W_LRA_L": -2.5308276702627177,
+        "W_BOP": -1.6613215889550825,
+        "W_QQE": -0.2916796539989131,
+        "W_TDI": -1.3014030596824835,
+        "W_CHV": -1.5497272892304732,
+        "W_CSI": 1.3001718711052979,
+        "Filter_ADX": 38.17393793756658,
+        "Threshold_Score": 2.068775084428696
+    },
+    "Metrics": {
+        "WR_Test": 73.97260273972603,
+        "PF_Test": 2.8421052631578947,
+        "Trades_Test": 73
+    }
+}

@@ -55,7 +55,7 @@
 
 #include <mySmoothAlgorithm2.mqh>
 
-input int    period = 30;
+input int    period = 14;
 input double alpha1 = 0.25;
 input double alpha2 = 0.33;
 input int    PriceType=0;

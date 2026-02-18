@@ -1,0 +1,33 @@
+{
+    "Period": "2025.01.01 - 2025.12.31",
+    "Total_Trades": 35,
+    "Win_Rate": 62.857142857142854,
+    "Profit_Factor": 1.6923076923076923,
+    "Monthly_Breakdown": {
+        "2025-03": {
+            "Total_Trades": 1,
+            "Win_Rate": 100.0,
+            "Profit_Factor": 99.9
+        },
+        "2025-06": {
+            "Total_Trades": 2,
+            "Win_Rate": 50.0,
+            "Profit_Factor": 1.0
+        },
+        "2025-10": {
+            "Total_Trades": 5,
+            "Win_Rate": 40.0,
+            "Profit_Factor": 0.6666666666666666
+        },
+        "2025-11": {
+            "Total_Trades": 19,
+            "Win_Rate": 68.42105263157895,
+            "Profit_Factor": 2.1666666666666665
+        },
+        "2025-12": {
+            "Total_Trades": 8,
+            "Win_Rate": 62.5,
+            "Profit_Factor": 1.6666666666666667
+        }
+    }
+}

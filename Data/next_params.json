@@ -1,0 +1,13 @@
+{
+    "BOP_Avg_inpSmoothPeriod": 198,
+    "BOP_Avg_inpAvgPeriod": 126,
+    "LRA_LwmaPeriod": 37,
+    "LRA_AvgPeriod": 136,
+    "BOP_Wma_inpWmaPeriod": 11,
+    "BOP_Wma_inpSmoothPeriod": 8,
+    "BSP_Wma_inpWmaPeriod": 23,
+    "BSP_Wma_inpSmoothPeriod": 8,
+    "CHV_InpSmoothPeriod": 116,
+    "CHV_InpCHVPeriod": 50,
+    "TDI_InpPeriodRSI": 12
+}

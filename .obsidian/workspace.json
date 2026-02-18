@@ -1,0 +1,205 @@
+{
+  "main": {
+    "id": "d154c1afd9f94d84",
+    "type": "split",
+    "children": [
+      {
+        "id": "d7700e1a6fa3b40f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e0bd0d747bd707e3",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "New tab"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "e1fea90f267105b8",
+    "type": "split",
+    "children": [
+      {
+        "id": "deebc89fcec79749",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "bfd0d48385dd2216",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "659a6dceb33f8a45",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "be8cfa2f63816a7b",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "4dac3be5753fef42",
+    "type": "split",
+    "children": [
+      {
+        "id": "839a3095037b8c3b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "1964bc4db2208368",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Data/1st-Strategy-HighUpstream-Strategy/Position Data Sample.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for Position Data Sample"
+            }
+          },
+          {
+            "id": "8970daadbe7b2265",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Data/1st-Strategy-HighUpstream-Strategy/Position Data Sample.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Position Data Sample"
+            }
+          },
+          {
+            "id": "8c426b0d2a250b12",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "e7cd895e42432f6f",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "0b4a80b0e4042758",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Data/1st-Strategy-HighUpstream-Strategy/Position Data Sample.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Position Data Sample"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "bfd0d48385dd2216",
+  "lastOpenFiles": [
+    "Files/BWMFI_MTF_DownLoad(5M).csv",
+    "Files/BWMFI_MTF_DownLoad.csv",
+    "Files/BWMFI_MTF_DownLoad(4H).csv",
+    "Files/TotalResult_2026_02_18_1.csv.tmp",
+    "Scripts/update_adxs_columns.py",
+    "Scripts/drop_columns_fast.py",
+    "Scripts/update_bwmtf_columns.py",
+    "Scripts/test_bwmtf_fast.py",
+    "Scripts/analyze_bwmtf.py",
+    "Files/Comparison_BOP_BSP.png",
+    "Scripts/compare_bop_bsp.py",
+    "Files/TotalResult_MQL5 copy.csv.url",
+    "Agents/1_Data_Prep.md",
+    "Docs/Prompt/Make-Strategy.md",
+    "Docs/Prompt/Order.md",
+    "Docs/Analysis_Report.md",
+    "Indicators/python_converter_list.md",
+    "Data/1st-Strategy-HighUpstream-Strategy/Position Data Sample.md",
+    "Data/1st-Strategy-HighUpstream-Strategy/LongTermBacktestResult.md",
+    "Data/1st-Strategy-HighUpstream-Strategy/Optimization_26_2_13.md"
+  ]
+}

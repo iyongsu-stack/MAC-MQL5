@@ -1,0 +1,31 @@
+{
+    "Best_Params": {
+        "LRA_AvgPeriod": 280,
+        "BOP_AvgPeriod": 50,
+        "BOP_SmoothPeriod": 20,
+        "ADX_Period": 42,
+        "TDI_RSI_Period": 10,
+        "TDI_VolBand_Period": 45,
+        "TDI_RSI_Smooth": 18,
+        "TDI_Sig_Smooth": 15,
+        "QQE_SF": 15,
+        "QQE_RSI_Period": 25,
+        "CHV_SmoothPeriod": 10,
+        "CHV_Period": 34,
+        "ATR_Period": 12,
+        "Chop_Period": 260,
+        "W_LRA": -0.6516959275445461,
+        "W_BOP": -1.0010681120463418,
+        "W_QQE": -2.095901481376338,
+        "W_TDI": 2.0204580317329683,
+        "W_CHV": -0.43401431611501423,
+        "W_CSI": 1.7345527160959804,
+        "Filter_ADX": 27.682423571489082,
+        "Threshold_Score": 13.196888136103052
+    },
+    "Metrics": {
+        "Win_Rate": 83.33333333333334,
+        "Profit_Factor": 5.0,
+        "Trades": 78
+    }
+}

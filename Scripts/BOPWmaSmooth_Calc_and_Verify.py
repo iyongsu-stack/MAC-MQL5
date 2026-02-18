@@ -254,9 +254,20 @@ class SmoothFilter:
 
 def calculate_bop_wma(input_data, wma_period=10, smooth_period=3):
     """
-    Calculates BOP WMA Smooth.
-    input_data: str (csv_path) or pd.DataFrame
-    return: pd.DataFrame
+    Calculates BOP WMA Smooth indicators.
+    
+    [WARNING]
+    This indicator uses Cumulative Sum logic (Reward accumulation).
+    The absolute value depends on the initialization start date.
+    Therefore, the absolute value itself is MEANINGLESS.
+    
+    [ANALYTICAL GUIDELINE]
+    - Do NOT use absolute values for thresholding.
+    - Use Slope (1st derivative) or Acceleration (2nd derivative) ONLY.
+    - Checking for Zero-Cross is valid ONLY if relative offset is calibrated.
+    
+    input_data: str (path) or pd.DataFrame
+    return: pd.DataFrame (with 'PySmoothBOP' column)
     """
     df = None
     if isinstance(input_data, str):

@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 
 #property copyright "Copyright © 2007, MetaQuotes Software Corp."
-#property link      "http://www.metaquotes.net"
+#property link      "https://www.mql5.com/en/code/546" 
 #property version   "1.00"
 #property indicator_separate_window
 #property indicator_buffers 3
@@ -35,7 +35,8 @@
 #property indicator_levelcolor Gray
 #property indicator_levelstyle STYLE_DASHDOTDOT
 
-input int    period = 30;
+input int    period = 14;
+//Original=14
 input double alpha1 = 0.25;
 input double alpha2 = 0.33;
 input int    PriceType=0;

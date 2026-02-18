@@ -1,0 +1,65 @@
+{
+   "Strategy_Name": "Weighted_Voting_Strategy_v1",
+   "Description": "Advanced multi-factor strategy optimized by Optuna on 2026.01 data. Uses weighted voting of 7 indicators and an ADX regime filter.",
+   "Optimization_Period": "2026.01.01 - 2026.02.11",
+   "Performance_Metrics": {
+      "Win_Rate": "76.92%",
+      "Profit_Factor": 3.01,
+      "SQN": 2.62
+   },
+   "Entry_Logic": {
+      "Type": "Weighted_Sum",
+      "Formula": "Sum(Indicator_Value * Weight) > Threshold_Score",
+      "Condition": "AND ADX_Val > Filter_ADX",
+      "Weights": {
+         "LRA_BSPScale(60)": 0.795497843,
+         "LRA_BSPScale(180)": -1.037286757,
+         "BOP_Diff": -1.787028857,
+         "QQE_TrLevel": 0.240291736,
+         "TDI_TrSi": 0.456918486,
+         "CHV_CVScale": 0.149571009,
+         "CSI_Scale": -1.254664094
+      },
+      "Parameters": {
+         "Threshold_Score": 6.765411873,
+         "Filter_ADX": 35.70490921
+      }
+   },
+   "Exit_Logic": {
+      "Type": "Fixed_Risk_Reward",
+      "Risk_Reward_Ratio": "1:1 (Tentative)",
+      "Stop_Loss": "ATR(14) * 1.5 or recent swing low (To be implemented in MQL5)",
+      "Take_Profit": "Equal to Stop Loss distance"
+   },
+   "Feature_Scaling_Stats": {
+      "LRA_BSPScale(60)": {
+         "mean": 0.095189,
+         "std": 1.089439
+      },
+      "LRA_BSPScale(180)": {
+         "mean": 0.158968,
+         "std": 1.081325
+      },
+      "BOP_Diff": {
+         "mean": 0.000007,
+         "std": 0.095303
+      },
+      "QQE_TrLevel": {
+         "mean": 51.147476,
+         "std": 6.828600
+      },
+      "TDI_TrSi": {
+         "mean": 51.405417,
+         "std": 11.501567
+      },
+      "CHV_CVScale": {
+         "mean": 0.138262,
+         "std": 1.023359
+      },
+      "CSI_Scale": {
+         "mean": 0.012152,
+         "std": 0.981460
+      }
+   },
+   "Notes": "Inputs must be normalized using Z-Score (Value - Mean) / Std before applying weights."
+}

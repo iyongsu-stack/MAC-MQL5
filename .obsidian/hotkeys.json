@@ -1,0 +1,11 @@
+{
+  "obsidian-minimal-settings:toggle-minimal-dark-cycle": [
+    {
+      "modifiers": [
+        "Alt",
+        "Shift"
+      ],
+      "key": "D"
+    }
+  ]
+}
