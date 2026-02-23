@@ -4,7 +4,7 @@ import math
 import os
 
 # --- Parameters (Must match ADXSmoothDownLoad.mq5) ---
-ADX_PERIOD = 30
+ADX_PERIOD = 14  # MQL5: input int period = 14 에 맞춰 동기화
 ALPHA1 = 0.25
 ALPHA2 = 0.33
 AVG_PERIOD = 1000
@@ -168,11 +168,17 @@ def calculate_adx(input_data):
         adx_raw[i] = dx[i] * alpha_adx + prev_a * (1.0 - alpha_adx)
         prev_a = adx_raw[i]
             
-    # Custom Smoothing Logic
-    adx_intermediate = np.zeros(rates_total)
-    adx_final_buf = np.zeros(rates_total)
-    
-    last_adx_val = 0.0
+    # Custom Smoothing Logic (Level 1 → Level 2, DiPlus/DiMinus/ADX 모두 동일 구조)
+    adx_intermediate   = np.zeros(rates_total)
+    adx_final_buf      = np.zeros(rates_total)
+    diplus_inter       = np.zeros(rates_total)  # Level-1 DiPlus 중간값
+    diminus_inter      = np.zeros(rates_total)  # Level-1 DiMinus 중간값
+    diplus_final_buf   = np.zeros(rates_total)  # Level-2 DiPlus 최종 버퍼
+    diminus_final_buf  = np.zeros(rates_total)  # Level-2 DiMinus 최종 버퍼
+
+    last_adx_val    = 0.0
+    last_diplus_val = 0.0   # Level-1 DiPlus 이전 상태
+    last_diminus_val= 0.0   # Level-1 DiMinus 이전 상태
     
     avg_calc = HiAverage(AVG_PERIOD)
     std_calc = HiStdDev1(STD_PERIOD)
@@ -181,18 +187,30 @@ def calculate_adx(input_data):
     scale_buf = np.zeros(rates_total)
     
     for i in range(1, rates_total):
-        curr_raw = adx_raw[i]
-        prev_raw = adx_raw[i-1]
-        
-        # Level 1 Smoothing
-        val_adx = 2 * curr_raw + (ALPHA1 - 2) * prev_raw + (1 - ALPHA1) * last_adx_val
-        adx_intermediate[i] = val_adx
-        
+        curr_raw  = adx_raw[i]
+        prev_raw  = adx_raw[i-1]
+        curr_dip  = pdi[i]
+        prev_dip  = pdi[i-1]
+        curr_dim  = ndi[i]
+        prev_dim  = ndi[i-1]
+
+        # Level 1 Smoothing (ADX, DiPlus, DiMinus 동일 공식)
+        val_adx    = 2 * curr_raw + (ALPHA1 - 2) * prev_raw + (1 - ALPHA1) * last_adx_val
+        val_diplus = 2 * curr_dip + (ALPHA1 - 2) * prev_dip + (1 - ALPHA1) * last_diplus_val
+        val_diminus= 2 * curr_dim + (ALPHA1 - 2) * prev_dim + (1 - ALPHA1) * last_diminus_val
+        adx_intermediate[i]  = val_adx
+        diplus_inter[i]      = val_diplus
+        diminus_inter[i]     = val_diminus
+
         # Level 2 Smoothing
-        prev_final = adx_final_buf[i-1]
-        adx_final_buf[i] = ALPHA2 * val_adx + (1 - ALPHA2) * prev_final
-        
-        last_adx_val = val_adx
+        adx_final_buf[i]     = ALPHA2 * val_adx    + (1 - ALPHA2) * adx_final_buf[i-1]
+        diplus_final_buf[i]  = ALPHA2 * val_diplus  + (1 - ALPHA2) * diplus_final_buf[i-1]
+        diminus_final_buf[i] = ALPHA2 * val_diminus + (1 - ALPHA2) * diminus_final_buf[i-1]
+
+        # 상태 업데이트 (MQL5: i < rates_total-1 일 때만 갱신)
+        last_adx_val     = val_adx
+        last_diplus_val  = val_diplus
+        last_diminus_val = val_diminus
         
         # Stats
         avg = avg_calc.calculate(adx_final_buf[i])
@@ -204,16 +222,68 @@ def calculate_adx(input_data):
         else:
             scale_buf[i] = scale_buf[i-1] if i > 0 else 0.0
 
-    df['Py_ADX'] = adx_final_buf
-    df['Py_Avg'] = avg_adx_buf
-    df['Py_Scale'] = scale_buf
+    df['Py_DiPlus']  = diplus_final_buf   # Level-2 DiPlus 최종값
+    df['Py_DiMinus'] = diminus_final_buf  # Level-2 DiMinus 최종값
+    df['Py_ADX']     = adx_final_buf
+    df['Py_Avg']     = avg_adx_buf
+    df['Py_Scale']   = scale_buf
     
     return df
 
 if __name__ == "__main__":
-    # Test execution
-    print("Running in verification mode...")
-    path = r'c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files\ADXSmooth_DownLoad.csv'
-    res = calculate_adx(path)
-    if res is not None:
-        print("Calculation successful.")
+    import sys
+    # Parquet 경로를 인자로 받거나 기본 경로 사용
+    parq_path = sys.argv[1] if len(sys.argv) > 1 else \
+        r'c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files\parquet\ADXSmooth_DownLoad.parquet'
+
+    print(f"[adx_verifier] Parquet 로드: {parq_path}")
+    import pyarrow.parquet as pq
+    df_raw = pq.read_table(parq_path).to_pandas()
+    df_raw.columns = [c.strip() for c in df_raw.columns]
+
+    # OHLCV 기초 데이터만 추출 (MQL5 계산값 제외)
+    base_cols = ['Time', 'Open', 'High', 'Low', 'Close']
+    df_base = df_raw[base_cols].copy()
+
+    res = calculate_adx(df_base)
+    if res is None:
+        print("[FAIL] 계산 실패"); sys.exit(1)
+
+    # MQL5 결과값 병합
+    for col in ['DiPlus', 'DiMinus', 'ADX', 'Average', 'Scale']:
+        if col in df_raw.columns:
+            res[col] = df_raw[col].values
+
+    # Parquet 저장 (덮어쓰기)
+    res.to_parquet(parq_path, index=False)
+    print(f"[OK] 독립 계산 결과 병합 완료: {parq_path}")
+
+    # 교차 검증
+    TOLERANCE = 1e-5
+    WARMUP    = 200
+    col_pairs = [
+        ('DiPlus',  'Py_DiPlus'),
+        ('DiMinus', 'Py_DiMinus'),
+        ('ADX',     'Py_ADX'),
+        ('Average', 'Py_Avg'),
+        ('Scale',   'Py_Scale'),
+    ]
+    df_check  = res.iloc[WARMUP:].copy()
+    rows      = []
+    all_pass  = True
+    for mql_col, py_col in col_pairs:
+        if mql_col not in df_check.columns or py_col not in df_check.columns:
+            rows.append({'컬럼': f'{mql_col} vs {py_col}', '최대오차(MAE)': 'N/A', '검증행수': 0, '불일치건수': -1, '판정': 'SKIP'})
+            continue
+        diff     = (df_check[mql_col] - df_check[py_col]).abs()
+        max_err  = diff.max()
+        fail_cnt = int((diff > TOLERANCE).sum())
+        if fail_cnt > 0: all_pass = False
+        rows.append({'컬럼': f'{mql_col} vs {py_col}', '최대오차(MAE)': f'{max_err:.2e}',
+                     '검증행수': len(df_check), '불일치건수': fail_cnt,
+                     '판정': 'PASS' if fail_cnt == 0 else 'FAIL'})
+
+    import pandas as pd
+    print("\n" + "="*60)
+    print(pd.DataFrame(rows).to_string(index=False))
+    print("\n" + ("✅ 전체 PASS" if all_pass else "❌ FAIL — Self-Refine 필요"))

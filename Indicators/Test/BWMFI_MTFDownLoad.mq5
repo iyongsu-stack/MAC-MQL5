@@ -265,7 +265,7 @@ int OnCalculate(const int rates_total,
    // --- File Writing Logic ---
    if(rates_total > 0 && !g_IsWritten) 
      {
-      string filename = "BWMFI_MTF_DownLoad.csv";
+      string filename = "raw\\BWMFI_MTF_DownLoad.csv";
       int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
       
       if(handle != INVALID_HANDLE) 

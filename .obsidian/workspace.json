@@ -4,17 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "d7700e1a6fa3b40f",
+        "id": "47c15198676852b0",
         "type": "tabs",
         "children": [
           {
-            "id": "e0bd0d747bd707e3",
+            "id": "d846e04009d21f96",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "Docs/DataBase/Parquet_Visualizer_매뉴얼.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "Parquet_Visualizer_매뉴얼"
             }
           }
         ]
@@ -49,7 +53,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "",
+                "query": "where",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -181,18 +185,22 @@
   },
   "active": "bfd0d48385dd2216",
   "lastOpenFiles": [
-    "Files/BWMFI_MTF_DownLoad(5M).csv",
-    "Files/BWMFI_MTF_DownLoad.csv",
-    "Files/BWMFI_MTF_DownLoad(4H).csv",
-    "Files/TotalResult_2026_02_18_1.csv.tmp",
-    "Scripts/update_adxs_columns.py",
-    "Scripts/drop_columns_fast.py",
-    "Scripts/update_bwmtf_columns.py",
-    "Scripts/test_bwmtf_fast.py",
-    "Scripts/analyze_bwmtf.py",
+    "Files/Tools/Parquit 파일 보기.md",
+    "Docs/DataBase/Parquet_Visualizer_매뉴얼.md",
+    "Docs/DataBase/FrameWork.md",
+    "Files/parquet/tmp_ADXSmooth_DownLoad.parquet",
+    "Files/raw/ADXSmooth_DownLoad.csv",
+    "Files/parquet/ADXSmooth_DownLoad.parquet",
+    "Logs/20260223.log",
+    "Files/parquet",
+    "Docs/DataBase",
+    "Docs/DB FrameWork.md",
+    "Docs/DB.md",
+    "Indicators/Test/TradesDynamicIndexDownLoad.log",
+    "Indicators/Test/ChoppingIndexDownLoad.log",
+    "Indicators/Test/ChandelieExitDownLoad.log",
+    "Indicators/Test/BWMFI_MTFDownLoad.log",
     "Files/Comparison_BOP_BSP.png",
-    "Scripts/compare_bop_bsp.py",
-    "Files/TotalResult_MQL5 copy.csv.url",
     "Agents/1_Data_Prep.md",
     "Docs/Prompt/Make-Strategy.md",
     "Docs/Prompt/Order.md",

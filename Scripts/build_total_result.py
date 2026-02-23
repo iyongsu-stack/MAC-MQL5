@@ -32,9 +32,9 @@ if SCRIPTS_DIR not in sys.path:
 # ---------------------------------------------------------------------------
 # Period Constants
 # ---------------------------------------------------------------------------
-WARMUP_START  = pd.Timestamp('2017-11-01')   # 6-month warmup before target
-OUTPUT_START  = pd.Timestamp('2018-05-01')
-OUTPUT_END    = pd.Timestamp('2019-01-31 23:59:59')
+WARMUP_START  = pd.Timestamp('1990-01-01')   # 전체 기간 (원본 데이터 시작 전)
+OUTPUT_START  = pd.Timestamp('1990-01-01')   # 전체 기간 출력
+OUTPUT_END    = pd.Timestamp('2030-12-31 23:59:59')  # 전체 기간 출력
 
 # ---------------------------------------------------------------------------
 # Import existing indicator modules
@@ -170,8 +170,8 @@ def phase1_load_data():
     if not os.path.exists(base_path):
         raise FileNotFoundError(f"기본 데이터 파일 없음: {base_path}")
 
-    # Read with tab separator (MQL5 default)
-    df = pd.read_csv(base_path, sep='\t')
+    # Read with tab separator (MQL5 default), UTF-8-sig for BOM handling
+    df = pd.read_csv(base_path, sep='\t', encoding='utf-8-sig')
     df.columns = [c.strip() for c in df.columns]
 
     # Parse datetime (MQL5 format: 2018.05.01 00:00)
@@ -242,100 +242,100 @@ def phase2_run_indicators(df_warmup):
     # ── 4. BOPWMA (10, 3) ───────────────────────────────────────────────
     # [WARNING] Absolute value is meaningless due to cumulative sum initialization.
     # Analytical Focus: Relative Change (Slope), Acceleration (Slope of Slope) ONLY.
-    print("  [4/17] BOPWMA (10,3)...", end=' ')
+    print("  [4/17] BOPWMA (10-3)...", end=' ')
     r = calculate_bop_wma(result.copy(), wma_period=10, smooth_period=3)
     if r is not None:
-        result['BOPWMA_(10,3)_SmoothBOP'] = r['PySmoothBOP'].values
+        result['BOPWMA_(10-3)_SmoothBOP'] = r['PySmoothBOP'].values
         print("DONE")
     else:
-        result['BOPWMA_(10,3)_SmoothBOP'] = np.nan
+        result['BOPWMA_(10-3)_SmoothBOP'] = np.nan
         print("FAIL")
 
-    # ── 5. BOPWMA (30, 5) ───────────────────────────────────────────────
+    # ── 5. BOPWMA (30-5) ───────────────────────────────────────────────
     # [WARNING] Absolute value is meaningless. Use Slope/Acceleration only.
-    print("  [5/17] BOPWMA (30,5)...", end=' ')
+    print("  [5/17] BOPWMA (30-5)...", end=' ')
     r = calculate_bop_wma(result.copy(), wma_period=30, smooth_period=5)
     if r is not None:
-        result['BOPWMA_(30,5)_SmoothBOP'] = r['PySmoothBOP'].values
+        result['BOPWMA_(30-5)_SmoothBOP'] = r['PySmoothBOP'].values
         print("DONE")
     else:
-        result['BOPWMA_(30,5)_SmoothBOP'] = np.nan
+        result['BOPWMA_(30-5)_SmoothBOP'] = np.nan
         print("FAIL")
 
-    # ── 6. BSPWMA (10, 3) ───────────────────────────────────────────────
+    # ── 6. BSPWMA (10-3) ───────────────────────────────────────────────
     # [WARNING] Absolute value is meaningless. Use Slope/Acceleration only.
-    print("  [6/17] BSPWMA (10,3)...", end=' ')
+    print("  [6/17] BSPWMA (10-3)...", end=' ')
     r = calculate_bsp_wma_smooth(result.copy(), wma_period=10, smooth_period=3)
     if r is not None:
-        result['BSPWMA_(10,3)_SmoothDiffRatio'] = r['MySmoothDiffRatio'].values
+        result['BSPWMA_(10-3)_SmoothDiffRatio'] = r['MySmoothDiffRatio'].values
         print("DONE")
     else:
-        result['BSPWMA_(10,3)_SmoothDiffRatio'] = np.nan
+        result['BSPWMA_(10-3)_SmoothDiffRatio'] = np.nan
         print("FAIL")
 
-    # ── 7. BSPWMA (30, 5) ───────────────────────────────────────────────
+    # ── 7. BSPWMA (30-5) ───────────────────────────────────────────────
     # [WARNING] Absolute value is meaningless. Use Slope/Acceleration only.
-    print("  [7/17] BSPWMA (30,5)...", end=' ')
+    print("  [7/17] BSPWMA (30-5)...", end=' ')
     r = calculate_bsp_wma_smooth(result.copy(), wma_period=30, smooth_period=5)
     if r is not None:
-        result['BSPWMA_(30,5)_SmoothDiffRatio'] = r['MySmoothDiffRatio'].values
+        result['BSPWMA_(30-5)_SmoothDiffRatio'] = r['MySmoothDiffRatio'].values
         print("DONE")
     else:
-        result['BSPWMA_(30,5)_SmoothDiffRatio'] = np.nan
+        result['BSPWMA_(30-5)_SmoothDiffRatio'] = np.nan
         print("FAIL")
 
     # ── 8. CHV (10, 10) ─────────────────────────────────────────────────
-    print("  [8/17] CHV (10,10)...", end=' ')
+    print("  [8/17] CHV (10-10)...", end=' ')
     r = calculate_chaikin(result.copy(), smooth_period=10, chv_period=10)
     if r is not None:
-        result['CHV_(10,10)_CHV']    = r['Py_CHV'].values
-        result['CHV_(10,10)_StdDev'] = r['Py_StdDev'].values
-        result['CHV_(10,10)_CVScale']= r['Py_CVScale'].values
+        result['CHV_(10-10)_CHV']    = r['Py_CHV'].values
+        result['CHV_(10-10)_StdDev'] = r['Py_StdDev'].values
+        result['CHV_(10-10)_CVScale']= r['Py_CVScale'].values
         print("DONE")
     else:
-        result['CHV_(10,10)_CHV'] = result['CHV_(10,10)_StdDev'] = result['CHV_(10,10)_CVScale'] = np.nan
+        result['CHV_(10-10)_CHV'] = result['CHV_(10-10)_StdDev'] = result['CHV_(10-10)_CVScale'] = np.nan
         print("FAIL")
 
-    # ── 9. TDI (13, 34, 2, 7) ───────────────────────────────────────────
+    # ── 9. TDI (13-34-2-7) ───────────────────────────────────────────
     # Note: vol_period=34 is not used in calculate_tdi (RSI-based only)
-    print("  [9/17] TDI (13,34,2,7)...", end=' ')
+    print("  [9/17] TDI (13-34-2-7)...", end=' ')
     r = calculate_tdi(result.copy(), rsi_period=13, smooth_rsi_period=2, signal_period=7)
     if r is not None:
-        result['TDI_(13,34,2,7)_TrSi']   = r['Py_TrSi'].values
-        result['TDI_(13,34,2,7)_Signal']  = r['Py_Signal'].values
+        result['TDI_(13-34-2-7)_TrSi']   = r['Py_TrSi'].values
+        result['TDI_(13-34-2-7)_Signal']  = r['Py_Signal'].values
         print("DONE")
     else:
-        result['TDI_(13,34,2,7)_TrSi'] = result['TDI_(13,34,2,7)_Signal'] = np.nan
+        result['TDI_(13-34-2-7)_TrSi'] = result['TDI_(13-34-2-7)_Signal'] = np.nan
         print("FAIL")
 
     # ── 10. QQE (SF=5, RSI=14) ──────────────────────────────────────────
-    print("  [10/17] QQE (5,14)...", end=' ')
+    print("  [10/17] QQE (5-14)...", end=' ')
     r = calculate_qqe(result.copy(), rsi_period=14, sf=5)
     if r is not None:
-        result['QQE_(5,14)_RSI']      = r['Py_RSI'].values
-        result['QQE_(5,14)_RsiMa']    = r['Py_RsiMa'].values
-        result['QQE_(5,14)_TrLevel']  = r['Py_TrLevel'].values
+        result['QQE_(5-14)_RSI']      = r['Py_RSI'].values
+        result['QQE_(5-14)_RsiMa']    = r['Py_RsiMa'].values
+        result['QQE_(5-14)_TrLevel']  = r['Py_TrLevel'].values
         print("DONE")
     else:
-        result['QQE_(5,14)_RSI'] = result['QQE_(5,14)_RsiMa'] = result['QQE_(5,14)_TrLevel'] = np.nan
+        result['QQE_(5-14)_RSI'] = result['QQE_(5-14)_RsiMa'] = result['QQE_(5-14)_TrLevel'] = np.nan
         print("FAIL")
 
-    # ── 11. ADXSmooth (Vma=10, Smooth=5) → ADX_PERIOD=10 ───────────────
-    print("  [11/17] ADXS (10,5)...", end=' ')
+    # ── 11. ADXSmooth (period=14) ────────────────────────────────────────
+    print("  [11/17] ADXS (14)...", end=' ')
     # Patch global variables before calling
-    adx_mod.ADX_PERIOD = 10
+    adx_mod.ADX_PERIOD = 14
     adx_mod.ALPHA1     = 0.25
     adx_mod.ALPHA2     = 0.33
     adx_mod.AVG_PERIOD = 1000
     adx_mod.STD_PERIOD = 4000
     r = adx_mod.calculate_adx(result.copy())
     if r is not None:
-        result['ADXS_(10,5)_ADX']   = r['Py_ADX'].values
-        result['ADXS_(10,5)_Avg']   = r['Py_Avg'].values
-        result['ADXS_(10,5)_Scale'] = r['Py_Scale'].values
+        result['ADXS_(14)_ADX']   = r['Py_ADX'].values
+        result['ADXS_(14)_Avg']   = r['Py_Avg'].values
+        result['ADXS_(14)_Scale'] = r['Py_Scale'].values
         print("DONE")
     else:
-        result['ADXS_(10,5)_ADX'] = result['ADXS_(10,5)_Avg'] = result['ADXS_(10,5)_Scale'] = np.nan
+        result['ADXS_(14)_ADX'] = result['ADXS_(14)_Avg'] = result['ADXS_(14)_Scale'] = np.nan
         print("FAIL")
 
     # ── 12. ChandelierExit (디폴트) ─────────────────────────────────────
@@ -352,7 +352,7 @@ def phase2_run_indicators(df_warmup):
         print("FAIL")
 
     # ── 13. ChoppingIndex (Cho=14, Smooth=14) ───────────────────────────
-    print("  [13/17] CHOP (14,14)...", end=' ')
+    print("  [13/17] CHOP (14-14)...", end=' ')
     # Patch global variables
     chop_mod.INP_CHO_PERIOD    = 14
     chop_mod.INP_SMOOTH_PERIOD = 14
@@ -361,12 +361,12 @@ def phase2_run_indicators(df_warmup):
     chop_mod.INP_SMOOTH_PHASE  = 0.0
     r = chop_mod.calculate_chopping(result.copy())
     if r is not None:
-        result['CHOP_(14,14)_CSI']   = r['Py_CSI'].values
-        result['CHOP_(14,14)_Avg']   = r['Py_Avg'].values
-        result['CHOP_(14,14)_Scale'] = r['Py_Scale'].values
+        result['CHOP_(14-14)_CSI']   = r['Py_CSI'].values
+        result['CHOP_(14-14)_Avg']   = r['Py_Avg'].values
+        result['CHOP_(14-14)_Scale'] = r['Py_Scale'].values
         print("DONE")
     else:
-        result['CHOP_(14,14)_CSI'] = result['CHOP_(14,14)_Avg'] = result['CHOP_(14,14)_Scale'] = np.nan
+        result['CHOP_(14-14)_CSI'] = result['CHOP_(14-14)_Avg'] = result['CHOP_(14-14)_Scale'] = np.nan
         print("FAIL")
 
     # ── 14. ADXSmoothMTF H4 ─────────────────────────────────────────────
@@ -534,7 +534,7 @@ def phase4_save(df):
     print(f"  총 행 수  : {len(df):,}")
     print(f"  총 컬럼 수: {len(df.columns)}")
 
-    df.to_csv(out_path, index=False, encoding='utf-8-sig')
+    df.to_csv(out_path, sep=',', index=False, encoding='utf-8-sig')
     print(f"  저장 완료: {out_path}")
 
     return out_path

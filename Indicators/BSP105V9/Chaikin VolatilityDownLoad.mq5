@@ -325,7 +325,7 @@ int OnCalculate(const int rates_total,
      }
 //----
    if(rates_total > 0 && !g_IsWritten) {
-      string filename = "Chaikin_Volatility_DownLoad.csv";
+      string filename = "raw\\Chaikin_Volatility_DownLoad.csv";
       int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
       
       if(handle != INVALID_HANDLE) {

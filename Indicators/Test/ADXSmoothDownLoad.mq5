@@ -153,6 +153,11 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
   {
    if(BarsCalculated(ADX_Handle)<rates_total || rates_total<min_rates_total) return(0);
 
+   // CopyBuffer를 먼저 시도하여 데이터 준비 여부 확인
+   // (실패 시 초기화 분기를 건너뜀으로써 불필요한 객체 재생성 방지)
+   double ADX_test[];
+   if(CopyBuffer(ADX_Handle, 0, 0, 1, ADX_test) <= 0) return(0);
+
    int start;
    double ADX[],DIP[],DIM[];
    
@@ -198,9 +203,9 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
       start = prev_calculated - 1; // Re-calculate last bar (open) and any new bars
      }
 
-   if(CopyBuffer(ADX_Handle,0,0,rates_total,ADX)<=0) return(0);
-   if(CopyBuffer(ADX_Handle,1,0,rates_total,DIP)<=0) return(0);
-   if(CopyBuffer(ADX_Handle,2,0,rates_total,DIM)<=0) return(0);
+   if(CopyBuffer(ADX_Handle,0,0,rates_total,ADX)<=0) { Print("CopyBuffer ADX failed: ", GetLastError()); return(0); }
+   if(CopyBuffer(ADX_Handle,1,0,rates_total,DIP)<=0) { Print("CopyBuffer DIP failed: ", GetLastError()); return(0); }
+   if(CopyBuffer(ADX_Handle,2,0,rates_total,DIM)<=0) { Print("CopyBuffer DIM failed: ", GetLastError()); return(0); }
    
    // Ensure local arrays are NOT series (0=oldest) to match forward loop
    ArraySetAsSeries(ADX, false);
@@ -258,18 +263,25 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
    // --- File Writing Logic ---
    if(rates_total > 0 && !g_IsWritten) 
      {
-      string filename = "ADXSmooth_DownLoad.csv";
+      // raw 폴더가 없으면 자동 생성 (FileOpen은 하위 폴더를 자동 생성하지 않음)
+      if(!FolderCreate("raw"))
+        {
+         int folderErr = GetLastError();
+         if(folderErr != 0) // 이미 존재하는 경우 오류 코드 5020 반환 — 무시 가능
+           Print("FolderCreate warning: ", folderErr);
+        }
+      string filename = "raw\\ADXSmooth_DownLoad.csv";
       int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
       
       if(handle != INVALID_HANDLE) 
         {
-         FileWrite(handle, "Time", "Open", "Close", "High", "Low", "ADX", "Average", "Scale");
+         FileWrite(handle, "Time", "Open", "Close", "High", "Low", "DiPlus", "DiMinus", "ADX", "Average", "Scale");
          
          for(int k=0; k<rates_total; k++) 
            {
             string timeStr = TimeToString(time[k], TIME_DATE|TIME_MINUTES);
-            // Write requested values: Time, OCHL, ADX, Average, Scale
-            FileWrite(handle, timeStr, open[k], close[k], high[k], low[k], ADXBuffer[k], AvgADXBuffer[k], ADXScale[k]);
+            // Write requested values: Time, OCHL, DiPlus, DiMinus, ADX, Average, Scale
+            FileWrite(handle, timeStr, open[k], close[k], high[k], low[k], DiPlusBuffer[k], DiMinusBuffer[k], ADXBuffer[k], AvgADXBuffer[k], ADXScale[k]);
            }
          FileClose(handle);
          Print("Data download complete: ", filename);
@@ -277,7 +289,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
         } 
       else 
         {
-         Print("Failed to open file for writing: ", filename, " Error: ", GetLastError());
+         Print("Failed to open file: ", filename, " Error: ", GetLastError(), " (5019=folder missing, 5004=access denied)");
         }
      }
      

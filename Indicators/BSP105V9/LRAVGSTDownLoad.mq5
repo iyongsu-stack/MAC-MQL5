@@ -268,7 +268,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
 
    // --- File Writing Logic ---
    if(!g_IsWritten) {
-      string filename = "LRAVGSTD_DownLoad.csv";
+      string filename = "raw\\LRAVGSTD_DownLoad.csv";
       int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
       
       if(handle != INVALID_HANDLE) {

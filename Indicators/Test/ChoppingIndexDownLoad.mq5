@@ -180,7 +180,7 @@ int OnCalculate(const int rates_total,
    Print("Check Write: rates_total=", rates_total, " g_IsWritten=", g_IsWritten);
    if(rates_total > 0 && !g_IsWritten) 
    {
-      string filename = "ChoppingIndex_DownLoad.csv";
+      string filename = "raw\\ChoppingIndex_DownLoad.csv";
       int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
       
       if(handle != INVALID_HANDLE) 

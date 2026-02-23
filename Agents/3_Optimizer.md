@@ -6,19 +6,46 @@
 ## Goal
 Python의 **Optuna** 프레임워크를 활용하여 반복적인 최적화 프로세스를 주도합니다.
 
+> [!IMPORTANT]
+> **원본 CSV 직접 로드 금지.** 모든 입력 데이터는 `1_Data_Prep`이 생성한 Parquet 파일을 사용합니다.
+
 > **⚠️ 핵심 교훈 (2025.02 검증 완료)**
 > - AI 최적화(가중합 + Z-Score)는 과적합 위험이 높음 → PF 최대 1.0 수준
 > - 전문가 도메인 지식 전략 (Expert Strategy)이 더 강건함
 > - 자세한 내용은 `Agents/5_Strategy_Designer.md` 참조
 
+---
+
+## 데이터 로드 표준
+
+```python
+import polars as pl
+import duckdb
+
+# [Polars] 최적화 루프 내 빠른 데이터 로드
+lf = pl.scan_parquet("Files/processed/TotalResult_2026_02_19_2.parquet")
+
+# [DuckDB] 특정 기간 데이터만 추출 (메모리 절약)
+df_train = duckdb.query("""
+    SELECT * FROM 'Files/processed/TotalResult_2026_02_19_2.parquet'
+    WHERE Time >= '2026-01-01'
+""").pl()  # → Polars DataFrame 직접 반환
+
+df_valid = duckdb.query("""
+    SELECT * FROM 'Files/processed/TotalResult_2026_02_19_2.parquet'
+    WHERE Time >= '2025-01-01' AND Time < '2026-01-01'
+""").pl()
+```
+
+---
+
 ## Tasks
-1.  **Autonomous Orchestration**: `Tools/5_auto_optimizer.py`를 실행하여 데이터 로드 → 최적화 → 시뮬레이션의 전 과정을 자동화합니다.
-2.  **Define Search Space**: `Tools/9_hyperopt.py` 상단의 `USER CONFIGURATION` 섹션에서 파라미터 범위를 정의합니다.
-3.  **Result Analysis**: 생성된 `Data/HyperOpt_Result.json`을 검토하여 최종 전략을 확정합니다.
-4.  **Cross-Validation**: 2026년 학습, 2025년 검증의 교차 검증을 통해 과적합을 방지합니다.
+1. **Autonomous Orchestration**: `Tools/5_auto_optimizer.py`를 실행하여 데이터 로드 → 최적화 → 시뮬레이션의 전 과정 자동화.
+2. **Define Search Space**: `Tools/9_hyperopt.py` 상단의 `USER CONFIGURATION` 섹션에서 파라미터 범위 정의.
+3. **Result Analysis**: 생성된 `Data/HyperOpt_Result.json`을 검토하여 최종 전략 확정.
+4. **Cross-Validation**: 2026년 학습, 2025년 검증의 교차 검증으로 과적합 방지.
 
 ## Search Space (탐색 범위)
-Optuna가 탐색할 파라미터 범위 (`Tools/9_hyperopt.py` 상단에 정의):
 
 | 파라미터 | 범위 | 설명 |
 |:---|:---|:---|
@@ -45,9 +72,9 @@ Optuna가 탐색할 파라미터 범위 (`Tools/9_hyperopt.py` 상단에 정의)
 | **ChoppingIndex** | Period, SmoothPeriod | 10~300, 5~150 |
 
 ## Tools
-| 스크립트 | 역할 |
-|:---|:---|
-| `Tools/9_hyperopt.py` | 마스터 최적화 (Optuna, 교차검증) |
-| `Tools/10_validate_hyper.py` | 최적화 결과 검증 (2025년 데이터) |
-| `Tools/5_auto_optimizer.py` | 자동화 오케스트레이터 |
-| `Tools/feature_engine.py` | 동적 지표 생성 엔진 |
+| 스크립트 | 계층 | 역할 |
+|:---|:---|:---|
+| `Tools/9_hyperopt.py` | Polars/Pandas | 마스터 최적화 (Optuna, 교차검증) |
+| `Tools/10_validate_hyper.py` | Polars | 최적화 결과 검증 (2025년 데이터) |
+| `Tools/5_auto_optimizer.py` | - | 자동화 오케스트레이터 |
+| `Tools/feature_engine.py` | Polars | 동적 지표 생성 엔진 |

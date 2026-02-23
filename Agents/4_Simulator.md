@@ -6,6 +6,38 @@
 ## Goal
 전략을 시뮬레이션하고, 정량적 지표 및 월별 성과로 검증 결과를 반환합니다.
 
+> [!IMPORTANT]
+> **원본 CSV 직접 로드 금지.** 모든 입력 데이터는 `1_Data_Prep`이 생성한 Parquet 파일을 사용합니다.
+> **🤖 제미나이(AI) 필수 작업 규칙:** 시뮬레이션 과정에서 얻은 핵심 지표(KPI) 기준이나 검증 교훈은 즉각 이 파일(`4_Simulator.md`)에 실시간으로 업데이트하여 에이전트 지식을 최신화하세요.
+
+---
+
+## 데이터 로드 표준
+
+```python
+import polars as pl
+import duckdb
+
+# [Polars] 전체 데이터 로드 (지표 포함)
+df = pl.read_parquet("Files/processed/TotalResult_2026_02_19_2.parquet")
+
+# [DuckDB] 특정 기간만 추출 (2025년 OOS 검증)
+df_oos = duckdb.query("""
+    SELECT * FROM 'Files/processed/TotalResult_2026_02_19_2.parquet'
+    WHERE Time >= '2025-01-01' AND Time < '2026-01-01'
+    ORDER BY Time
+""").pl()
+
+# [DuckDB] 장기 백테스트 (2010~현재)
+df_long = duckdb.query("""
+    SELECT * FROM 'Files/processed/TotalResult_2026_02_19_2.parquet'
+    WHERE Time >= '2010-01-01'
+    ORDER BY Time
+""").pl()
+```
+
+---
+
 ## 핵심 지표 (KPI)
 
 | 지표 | 설명 | 기준 |
@@ -46,9 +78,11 @@ Initial SL = Entry - 2.0pt
 ```
 
 ## Inputs
-- 전략 파라미터 (from `Optimizer` 또는 `Strategy_Designer`)
-- `Data/xauusd_1min.csv` (2025년 검증 데이터)
-- `Data/XAUUSD_M1_*.csv` (2010~현재 장기 데이터, MT5 TAB 포맷)
+| 경로 | 설명 |
+|:---|:---|
+| `Files/processed/TotalResult_2026_02_19_2.parquet` | 전체 지표 데이터 |
+| `Files/labeled/TotalResult_Labeled.parquet` | 라벨링 완료 데이터 |
+| 전략 파라미터 | `Optimizer` 또는 `Strategy_Designer`로부터 수신 |
 
 ## Outputs
 - PF, WR, Net R, MDD
@@ -56,22 +90,22 @@ Initial SL = Entry - 2.0pt
 - 목표 수익률 환산 (20%, 50% 등)
 - Equity Curve Data
 
-## 목표 수익률 환산 방법
+## 목표 수익률 환산
+
 ```
 1R 리스크 비율 = 목표 월수익률(%) / 월 평균 Net R
 ```
-예: 월 50% 목표, 월 평균 55R → 1R = 계좌의 0.91%
 
 | 목표 월수익률 | 1R 리스크 | 장중 MDD(23R 기준) | 위험도 |
 |:---|:---|:---|:---|
-| 10% | 0.18% | 4.2% | 🟢 안전 |
-| 20% | 0.36% | 8.4% | 🟢 안전 |
-| 30% | 0.55% | 12.6% | 🟡 공격적 |
-| 50% | 0.91% | 21.1% | 🔴 위험 |
+| 10% | 0.18% | 4.2% | 안전 |
+| 20% | 0.36% | 8.4% | 안전 |
+| 30% | 0.55% | 12.6% | 공격적 |
+| 50% | 0.91% | 21.1% | 위험 |
 
 ## Tools
-| 스크립트 | 역할 |
-|:---|:---|
-| `Tools/6_backtest_2025.py` | 2025년 백테스트 (기본) |
-| `Tools/14_best_strategy.py` | 전문가 전략 6종 비교 |
-| `Tools/15_longterm_backtest.py` | 장기 백테스트 (2010~현재) |
+| 스크립트 | 계층 | 역할 |
+|:---|:---|:---|
+| `Tools/6_backtest_2025.py` | Polars/Pandas | 2025년 백테스트 (기본) |
+| `Tools/14_best_strategy.py` | Polars | 전문가 전략 6종 비교 |
+| `Tools/15_longterm_backtest.py` | DuckDB+Polars | 장기 백테스트 (2010~현재) |

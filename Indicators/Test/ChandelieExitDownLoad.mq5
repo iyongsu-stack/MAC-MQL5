@@ -118,7 +118,7 @@ int OnCalculate(const int rates_total,const int prev_calculated,const datetime &
    // --- File Writing Logic ---
    if(rates_total > 0 && !g_IsWritten) 
    {
-      string filename = "ChandelieExit_DownLoad.csv";
+      string filename = "raw\\ChandelieExit_DownLoad.csv";
       int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
       
       if(handle != INVALID_HANDLE) 

@@ -6,14 +6,47 @@
 ## Goal
 도메인 지식(금융 논리)에 기반하여 과적합 없는 강건한 트레이딩 전략을 설계하고, 다양한 시장 환경에서 검증합니다.
 
+> [!IMPORTANT]
+> **원본 CSV 직접 로드 금지.** 모든 입력 데이터는 `1_Data_Prep`이 생성한 Parquet 파일을 사용합니다.
+
 > **이 Agent가 필요한 이유:**
 > AI 최적화(가중합 + Z-Score)는 PF ~1.0 수준에 그쳤으나,
 > 전문가 도메인 지식 전략 + 트레일링스탑은 PF 1.23을 달성했습니다.
 
+---
+
+## 데이터 로드 표준
+
+```python
+import polars as pl
+import duckdb
+
+# [Polars] 전략 설계용 데이터 로드
+df = pl.read_parquet("Files/processed/TotalResult_2026_02_19_2.parquet")
+
+# [Polars] 계층적 필터 적용
+result = df.filter(
+    (pl.col("LRA_stdS_180") > 0) &   # 장기 상승 추세
+    (pl.col("ADX") > 25) &            # 추세 강도 충분
+    (pl.col("LRA_stdS_60") > 0) &    # 단기 모멘텀 회복
+    (pl.col("BOP_Smooth") > 0) &     # 매수세 우위
+    (pl.col("RSI") < 70)             # 과매수 아님
+)
+
+# [Polars] Slope/Accel 계산
+df = df.with_columns([
+    (pl.col("LRA_stdS_60") - pl.col("LRA_stdS_60").shift(10)).alias("LRA_Accel_S"),
+    (pl.col("ADX") - pl.col("ADX").shift(10)).alias("ADX_Accel"),
+    (pl.col("BOP_Smooth") - pl.col("BOP_Smooth").shift(10)).alias("BOP_Accel"),
+])
+```
+
+---
+
 ## 핵심 원칙
 
 ### 1. Z-Score 정규화 금지
-- 배치 Z-Score는 미래 데이터(전체 평균/표준편차)를 사용 → **정보 누출**
+- 배치 Z-Score는 미래 데이터(전체 평균/표준편차) 사용 → **정보 누출**
 - 대신 **원시 지표값 + 교과서적 임계값** 사용
 - 예: `ADX > 25` (추세 존재), `RSI < 70` (과매수 아님)
 
@@ -28,7 +61,7 @@
 - 각 조건이 명확한 금융적 의미를 가짐
 
 ### 3. 전체 지표 가속도 (Acceleration = 2차 미분)
-모든 지표에 대해 `Accel = 현재값 - N봉전 값` (N = 10~20봉)을 계산합니다.
+모든 지표에 대해 `Accel = 현재값 - N봉전 값` (N = 10~20봉).
 
 | 가속도 지표 | 원본 | 의미 |
 |:---|:---|:---|
@@ -38,8 +71,6 @@
 | `BOP_Accel` | BOP_Smooth | 매수압력 증가 중 |
 | `RSI_Accel` | RSI(14) | 모멘텀 가속 |
 | `CHV_Accel` | CHV | 변동성 확대 중 |
-| `CSI_Accel` | CSI/ATR | ATR 변화율 |
-| `TDI_Accel` | TDI Signal | TDI 시그널 변화 |
 
 **진입 가속 필터** (핵심 3개):
 ```
@@ -54,6 +85,8 @@ LRA_Accel_S > 0  AND  ADX_Accel > 0  AND  BOP_Accel > 0
 | 비대칭 1.5:1 | 1.01 | ❌ 거의 손익분기 |
 | **트레일링스탑** | **1.23** | ✅ **유일한 알파** |
 
+---
+
 ## 챔피언 전략: "트레일링스탑 눌림목 매수"
 
 ### 진입 조건 (LONG Only)
@@ -64,7 +97,7 @@ LRA_Accel_S > 0  AND  ADX_Accel > 0  AND  BOP_Accel > 0
 | 신호 | LRA(60) > 0 | 단기 모멘텀 회복 |
 | 신호 | BOP_Smooth(50/20) > 0 | 매수세 우위 |
 | 확인 | RSI(14) < 70 | 과매수 아님 |
-| **가속** | **LRA_Accel_S(10) > 0** | **기울기 강화 중 (모멘텀 가속)** |
+| **가속** | **LRA_Accel_S(10) > 0** | **기울기 강화 중** |
 
 ### 청산 조건 (Trailing Stop)
 | 항목 | 값 |
@@ -77,19 +110,14 @@ LRA_Accel_S > 0  AND  ADX_Accel > 0  AND  BOP_Accel > 0
 ### 검증 결과
 
 #### 2025년 (Out-of-Sample)
-- 총 거래: 8,232회
-- 승률: 64.2%
-- PF: 1.23
-- Net R: +659.4R
-- MDD: 23.2R
+- 총 거래: 8,232회 | 승률: 64.2% | PF: 1.23 | Net R: +659.4R | MDD: 23.2R
 - **12개월 중 11개월 수익**
 
 #### 2010~2025년 장기 백테스트
-- 총 거래: 36,456회
-- 승률: 64.1%
-- PF: 1.19
-- Net R: +2,268R
+- 총 거래: 36,456회 | 승률: 64.1% | PF: 1.19 | Net R: +2,268R
 - **15년 중 유일한 손실: 2021년 (금 횡보장)**
+
+---
 
 ## 전략 변형 테스트 기록
 
@@ -101,14 +129,14 @@ LRA_Accel_S > 0  AND  ADX_Accel > 0  AND  BOP_Accel > 0
 | D: 적응형 눌림목 | B + ADX 적응형 | 0.99 | ❌ |
 | **B + 트레일링스탑** | **눌림목 + 트레일링** | **1.23** | ✅ **챔피언** |
 
-## Limitations (한계)
-- **추세 의존**: 횡보장(2017~2018, 2021)에서는 수익이 미미
+## Limitations
+- **추세 의존**: 횡보장(2017~2018, 2021)에서는 수익 미미
 - **Long Only**: 매도(Short) 전략은 PF 0.81로 실패
-- **고가 자산 유리**: 2020년 이후 금 가격 상승($2000+)으로 변동성 증가 → 전략 유리
+- **고가 자산 유리**: 2020년 이후 금 가격 상승으로 변동성 증가
 
 ## Tools
-| 스크립트 | 역할 |
-|:---|:---|
-| `Tools/13_expert_strategy.py` | 4종 진입 전략 비교 |
-| `Tools/14_best_strategy.py` | 6종 (진입×청산) 통합 비교 |
-| `Tools/15_longterm_backtest.py` | 장기 백테스트 (2010~현재) |
+| 스크립트 | 계층 | 역할 |
+|:---|:---|:---|
+| `Tools/13_expert_strategy.py` | Polars | 4종 진입 전략 비교 |
+| `Tools/14_best_strategy.py` | Polars | 6종 (진입×청산) 통합 비교 |
+| `Tools/15_longterm_backtest.py` | DuckDB+Polars | 장기 백테스트 (2010~현재) |

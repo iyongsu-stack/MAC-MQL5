@@ -138,7 +138,7 @@ int OnCalculate(const int rates_total,    // number of bars in history at the cu
 
    // --- File Writing Logic ---
    if(bar >= rates_total && !g_IsWritten) {
-      string filename = "BSPWmaSmooth_DownLoad.csv";
+      string filename = "raw\\BSPWmaSmooth_DownLoad.csv";
       int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
       
       if(handle != INVALID_HANDLE) {

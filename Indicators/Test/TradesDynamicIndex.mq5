@@ -47,12 +47,12 @@ enum ENUM_INPUT_YES_NO
    INPUT_NO    =  0  // No
   };
 //--- input parameters
-input uint                 InpPeriodRSI         =  13;            // RSI period
+input uint                 InpPeriodRSI         =  14;            // RSI period
 input ENUM_APPLIED_PRICE   InpAppliedPriceRSI   =  PRICE_CLOSE;   // RSI applied price
 input uint                 InpPeriodVolBand     =  34;            // Volatility band period
-input uint                 InpPeriodSmRSI       =  2;             // RSI smoothing period
+input uint                 InpPeriodSmRSI       =  90;             // RSI smoothing period
 input ENUM_MA_METHOD       InpMethodSmRSI       =  MODE_SMA;      // RSI smoothing method
-input uint                 InpPeriodSmSig       =  7;             // Signal smoothing period
+input uint                 InpPeriodSmSig       =  35;             // Signal smoothing period
 input ENUM_MA_METHOD       InpMethodSmSig       =  MODE_SMA;      // Signal smoothing method
 input double               InpOverbought        =  68;            // Overbought
 input double               InpOversold          =  32;            // Oversold

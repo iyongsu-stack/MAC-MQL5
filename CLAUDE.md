@@ -34,7 +34,7 @@
 - **Data Analysis**: Python (`pandas`, `numpy`) 사용, **시각화(.png) 필수**.
 
 ## 4. Environment & Tools
-**Build**: `"C:\Program Files\MetaTrader 5\metaeditor64.exe" /compile:"<file>" /log`
+**Build**: `"C:\Program Files\MetaTrader5\MetaEditor64.exe" /compile:"<file>" /log`
 **VS Code**: `Ctrl+Shift+B` (빌드 태스크), Tab=3spaces, `.mq5`/`.mqh` → C++
 
 **Key Paths**:

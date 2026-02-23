@@ -144,7 +144,7 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void WriteToFile(const int rates_total, const datetime& time[], const double& open[], const double& high[], const double& low[], const double& close[])
   {
-   string filename = "ADXSmoothMTF_DownLoad.csv";
+   string filename = "raw\\ADXSmoothMTF_DownLoad.csv";
    int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
 
    if(handle != INVALID_HANDLE)

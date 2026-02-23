@@ -2,14 +2,15 @@ param (
    [Parameter(Mandatory = $true)]
    [string]$TargetFile,
     
-   [string]$MetaEditorPath = "C:\Program Files\MetaTrader 5\metaeditor64.exe"
+   [string]$MetaEditorPath = "C:\Program Files\MetaTrader5\MetaEditor64.exe"
 )
 
 # 0. Path Adjustments & Validation
 $Paths = @(
-   "C:\Program Files\MetaTrader 5\metaeditor64.exe",
+   "C:\Program Files\MetaTrader5\MetaEditor64.exe",
    "C:\Program Files\MetaTrader5\metaeditor64.exe",
-   "C:\Program Files\MetaTrader5\Metaeditor64.exe"
+   "C:\Program Files\MetaTrader 5\MetaEditor64.exe",
+   "C:\Program Files\MetaTrader 5\metaeditor64.exe"
 )
 
 $MetaEditorExe = ""

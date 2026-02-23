@@ -101,7 +101,7 @@ int OnCalculate(const int rates_total,
 
    // --- File Writing Logic ---
    if(i >= rates_total && !g_IsWritten) {
-      string filename = "BOPWmaSmooth_DownLoad.csv";
+      string filename = "raw\\BOPWmaSmooth_DownLoad.csv";
       int handle = FileOpen(filename, FILE_CSV|FILE_WRITE|FILE_ANSI);
       
       if(handle != INVALID_HANDLE) {

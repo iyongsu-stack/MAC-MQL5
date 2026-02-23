@@ -200,9 +200,9 @@ AI에게 작업을 요청할 때 아래 패턴을 사용하면 답변 품질이 
 |------|----------|
 | **MQL5 Root** | `.../MQL5` |
 | **MT5 Terminal** | `C:\Program Files\MetaTrader5\terminal64.exe` |
-| **MetaEditor** | `C:\Program Files\MetaTrader 5\metaeditor64.exe` |
+| **MetaEditor** | `C:\Program Files\MetaTrader5\MetaEditor64.exe` |
 | **Python** | `C:\Python314\python.exe` |
-| **컴파일 명령** | `metaeditor64.exe /compile:"<file.mq5>" /log` |
+| **컴파일 명령** | `"C:\Program Files\MetaTrader5\MetaEditor64.exe" /compile:"<file.mq5>" /log` |
 
 ### MCP Servers (즉시 사용 가능)
 
@@ -221,7 +221,7 @@ AI에게 작업을 요청할 때 아래 패턴을 사용하면 답변 품질이 
 
 ### ✅ 사용자 승인 없이 자동 실행 허용
 - 파일 읽기/조회 (dir, type, cat, ls, find 등)
-- MQL5 컴파일 (metaeditor64.exe /compile)
+- MQL5 컴파일 (`"C:\Program Files\MetaTrader5\MetaEditor64.exe" /compile`)
 - Python 스크립트 실행 (데이터 분석, 지표 계산, 시각화, 백테스트)
 - pip install / pip list
 - Git 상태 조회 (git status, git log, git diff)

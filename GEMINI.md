@@ -63,7 +63,7 @@
 ## 4. Environment & Tools
 **Build Command**:
 ```bash
-"C:\Program Files\MetaTrader 5\metaeditor64.exe" /compile:"<file.mq5>" /log
+"C:\Program Files\MetaTrader5\MetaEditor64.exe" /compile:"<file.mq5>" /log
 ```
 **Key Paths**:
 - **Root**: `.../MQL5`
