@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Docs/DataBase/Parquet_Visualizer_매뉴얼.md",
+                "file": "Docs/TrendTrading Development Strategy/XAUUSD_AI_전략개발_종합_로드맵.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Parquet_Visualizer_매뉴얼"
+              "title": "XAUUSD_AI_전략개발_종합_로드맵"
             }
           }
         ]
@@ -183,23 +183,30 @@
       "bases:Create new base": false
     }
   },
-  "active": "bfd0d48385dd2216",
+  "active": "d846e04009d21f96",
   "lastOpenFiles": [
-    "Files/Tools/Parquit 파일 보기.md",
+    "Files/Tools/build_result.txt",
+    "Files/Tools/temp_check_220.py",
+    "Files/Tools/diag.txt",
+    "Files/Tools/verify_full_result.txt",
+    "Files/Tools/verify_full_macro.py",
+    "Files/Tools/verify_result.txt",
+    "Files/Tools/verify_macro_parquet.py",
+    "Files/Tools/get_xauusd_info2.py",
+    "Files/Tools/get_xauusd_info.py",
+    "Files/processed/labels_barrier.parquet",
+    "Files/processed/tech_features.parquet",
+    "Docs/TrendTrading Development Strategy/Memo.md",
+    "Docs/TrendTrading Development Strategy/feature_gap_analysis.md",
     "Docs/DataBase/Parquet_Visualizer_매뉴얼.md",
+    "Docs/TrendTrading Development Strategy/ DB Framework.md",
+    "Docs/TrendTrading Development Strategy/XAUUSD_AI_전략개발_종합_로드맵.md",
+    "Docs/TrendTrading Development Strategy/XAUUSD_AI_피처_완전_가이드.md",
+    "Docs/DataBase/Position Data Sample.md",
+    "Files/Tools/Parquit 파일 보기.md",
     "Docs/DataBase/FrameWork.md",
-    "Files/parquet/tmp_ADXSmooth_DownLoad.parquet",
-    "Files/raw/ADXSmooth_DownLoad.csv",
-    "Files/parquet/ADXSmooth_DownLoad.parquet",
-    "Logs/20260223.log",
-    "Files/parquet",
-    "Docs/DataBase",
     "Docs/DB FrameWork.md",
     "Docs/DB.md",
-    "Indicators/Test/TradesDynamicIndexDownLoad.log",
-    "Indicators/Test/ChoppingIndexDownLoad.log",
-    "Indicators/Test/ChandelieExitDownLoad.log",
-    "Indicators/Test/BWMFI_MTFDownLoad.log",
     "Files/Comparison_BOP_BSP.png",
     "Agents/1_Data_Prep.md",
     "Docs/Prompt/Make-Strategy.md",

@@ -10,7 +10,7 @@ LIMIT 30;
 2. 가장 처음 데이터 30개 보기 (내림순 정렬)
 SELECT * 
 FROM read_parquet('c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/TotalResult_2026_02_19_2.parquet') 
-ORDER BY time DESC 
+ORDER BY time ASC 
 LIMIT 30;
 
 3. 특정 시간대를 보기 원한다면 
@@ -18,6 +18,12 @@ SELECT *
 FROM read_parquet('c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/TotalResult_2026_02_19_2.parquet')
 WHERE time BETWEEN '2024-01-01 00:00:00' AND '2024-01-31 23:59:59'
 ORDER BY time ASC;
+
+
+SELECT *
+FROM read_csv('c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/raw/ChoppingIndex_DownLoad.csv')
+WHERE Time BETWEEN '2026.02.18 13:50:00' AND '2026.02.18 14:00:00'
+LIMIT 30;
 
 4. 특정 컬럼만 읽기 원한다면
 SELECT time, close, volume

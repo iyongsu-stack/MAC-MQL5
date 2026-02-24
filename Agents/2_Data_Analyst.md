@@ -1,14 +1,64 @@
 # Agent: Data_Analyst
 
 ## Role
-데이터 분석 및 인사이트 도출 전문가 (Data Analyst & Insight Generator)
+데이터 분석 및 AI 피처 선택 전문가 (Data Analyst & AI Feature Selector)
 
 ## Goal
-`1_Data_Prep`이 생성한 Parquet 데이터를 분석하여 초기 파라미터 범위를 제안하고, `Optimizer`에게 최적화의 시작점(Seed)을 제공합니다.
+`1_Data_Prep`이 생성한 Parquet 데이터를 분석하여 **SHAP 기반 핵심 피처를 추출**하고, AI 패턴 마이닝의 입력 피처셋을 확정합니다.
 
 > [!IMPORTANT]
 > **원본 CSV 직접 로드 금지.** 모든 입력 데이터는 반드시 `1_Data_Prep` 에이전트가 생성한 Parquet 파일을 사용합니다.
+> 
+> **🚨 AI 전략 개발 3대 핵심 원칙 (절대 준수)**
+> 1. **Shift+1 원칙**: 상위 타임프레임(H1 등) 맵핑 시 무조건 직전 완성봉만 사용 파악 (Look-ahead Bias 절대 방지)
+> 2. **Friction Cost 30포인트**: 데이터 분석 시 및 승률(Win-Rate) 등 모든 수익/실패 계산 시 30포인트 강제 반영
+> 3. **절대값 분석 금지**: 원본값 기준 필터/패턴 분석 금지, 파생 피처(추세, Z-score)만 사용해 분석
+> 
 > **🤖 제미나이(AI) 필수 작업 규칙:** 분석(Analysis) 시 발견된 새로운 인사이트나 분석 기법은 즉각 이 파일(`2_Data_Analyst.md`)에 실시간으로 업데이트하여 에이전트 지식을 최신화하세요.
+
+---
+
+## 핵심 분석 방법론 (2026-02-24 업데이트)
+
+### 1차: 메가 피처 풀 → SHAP 자동 추출 (주력)
+```
+모든 피처(기술+매크로+세션) 50~100개를 통째로 LightGBM에 투입
+      ↓
+SHAP Feature Importance 리포트 생성
+      ↓
+"승률 75%를 만든 1등 공신은 [BWMFI] 35%, 2등은 [UST10Y Δ%] 20%"
+      ↓
+상위 10~15개만 유지, 하위 80% 피처 제거
+```
+
+### 2차: Ablation Study — 새 지표 검증용 (보조)
+```
+실험 1: SHAP 상위 10개 피처만    → 승률 58%, Sharpe 1.1
+실험 2: + 새 지표 1개 추가        → 승률 60%, Sharpe 1.2 ✅ 효과 있음
+실험 3: + 또 다른 새 지표 추가    → 승률 60%, Sharpe 1.15 ❌ 미미, 제거
+```
+
+### 3차: 다중공선성(Multicollinearity) 검증
+```python
+# 상관계수 > 0.85인 피처 쌍 중 하나를 제거
+features_df.corr()
+# UST10Y_chg와 EURUSD_chg가 0.85 이상이면 → 하나 제거 또는 합성
+```
+
+---
+
+## 피처 분석 6가지 파생 유형
+
+> **원본값 그대로 넣는 피처는 하나도 없어야 합니다.**
+
+| 유형 | 공식 | 적용 예 |
+|------|------|---------|
+| **변화율 (Return)** | `(현재값 - n봉 전 값) / n봉 전 값` | UST10Y 1일/5일 변화율 |
+| **가속도 (Acceleration)** | `현재 변화율 - 직전 변화율` | RSI가 빨라지는 중인가? |
+| **Z-Score** | `(현재값 - 120봉 평균) / 120봉 표준편차` | VIX가 비정상적으로 높은가? |
+| **정규화 이격도** | `(현재가 - EMA) / ATR` | 이평선과의 실질적 거리 |
+| **롤링 상관계수** | `corr(A, B, window=n)` | 금-달러 관계 건강상태 |
+| **비율 (Ratio)** | `A / B` | 금/은 비율, 금/구리 비율 |
 
 ---
 
@@ -18,7 +68,6 @@
 ```python
 import polars as pl
 
-# Parquet 지연 로드 후 필요한 컬럼만 선택
 lf = pl.scan_parquet("Files/processed/TotalResult_2026_02_19_2.parquet")
 df = lf.select(["Time", "ADX", "LRA_stdS", "BOP_Smooth", "label_entry"]).collect()
 ```
@@ -27,7 +76,6 @@ df = lf.select(["Time", "ADX", "LRA_stdS", "BOP_Smooth", "label_entry"]).collect
 ```python
 import duckdb
 
-# 특정 조건 필터링 + 집계
 result = duckdb.query("""
     SELECT DATE_TRUNC('month', Time) as month,
            AVG(ADX) as avg_adx, COUNT(*) as cnt
@@ -42,37 +90,28 @@ result = duckdb.query("""
 ## Inputs
 | 경로 | 설명 |
 |:---|:---|
-| `Files/processed/TotalResult_2026_02_19_2.parquet` | 전체 지표 데이터 (메인) |
-| `Files/labeled/TotalResult_Labeled.parquet` | 라벨링 완료 데이터 |
-| `Files/processed/*_DownLoad.parquet` | 개별 지표 데이터 |
-
-- Analysis Focus: `2026.01.01` ~ `2026.02.11` (Labeled Period)
-- Background Data: `2025.01.01` ~ (지표 워밍업)
+| `Files/processed/TotalResult_2026_02_19_2.parquet` | 전체 기술적 지표 데이터 (메인) |
+| `Files/processed/macro/*.parquet` | 매크로 피처 (변화율·Z-score 변환 완료) |
+| `Files/labeled/*.parquet` | Triple Barrier 라벨링 완료 데이터 |
 
 ## Outputs
 - `Docs/Analysis_Report.md`
-- **초기 최적화 파라미터** (→ `Optimizer`)
+- **SHAP Feature Importance 리포트** (핵심 피처 순위)
+- **상관행렬(Correlation Matrix)** — 다중공선성 검증 결과
 - **Market Regime 분류** (추세/횡보 구간 식별)
 
 ---
 
 ## Tasks
-1. **Feature Engineering**: 주요 지표 계산 및 데이터 구조 파악.
-    - **Dual LRAVGSTD Analysis**: `LRA_stdS(60)/BSPScale(60)` (단기)와 `LRA_stdS(180)/BSPScale(180)` (장기)를 독립 변수로 분석.
-    - **Slope Acceleration**: `LRA_Accel_S = LRA(60)[현재] - LRA(60)[N봉전]` (N=10~20). 기울기의 2차 미분으로 추세 가속/감속 판별.
-    - **Intra-Indicator Analysis**: `BOP`(Diff, Up1, Scale), `LRA`(stdS, BSPScale), `CHV`(Val, StdDev, CVScale), `TDI`(TrSi, Signal), `QQE`(RsiMa, TrLevel), `ADX`(Val, Avg, Scale) 등 파생 변수 간 상호관계 분석.
-2. **종합 분석** (`Tools/16_comprehensive_analysis.py`): 8가지 분석 한 번에 수행.
-    1. 다이버전스: 가격 vs 지표 괴리 빈도 + 반전율
-    2. 조합 클러스터링: 가속도 방향 조합(2^3=8개)별 승률/PF
-    3. 변동성 레짐: ATR 3구간별 전략 성과 비교
-    4. 지표 분포: 승리/패배 거래별 최적 범위(Zone) 도출
-    5. 세션 분석: 아시안/런던/뉴욕 시간대별 KPI
-    6. R-Multiple 분포: 청산 품질, 캡처율, 보유 기간 분석
-    7. 리드/래그: 교차상관 → 선행 지표 순위
-    8. ML 피처 중요도: Random Forest Feature Importance
-3. **Correlation Analysis**: 라벨과 지표 간 상관관계 분석.
-4. **Market Regime Analysis**: 추세/횡보 구간 분류 (ADX, 변동성 기반).
-5. **Initial Parameter Suggestion**: 데이터 분포와 상관관계를 바탕으로 탐색 범위 제안.
+1. **SHAP 피처 중요도 분석**: 메가 피처 풀 → LightGBM → SHAP 리포트 → 상위 10~15개 추출.
+2. **다중공선성 검증**: 상관계수 > 0.85 피처 쌍 식별 및 필터링.
+3. **매크로 피처 유효성 분석**: UST10Y, EURUSD, US500 등 매크로 변화율의 금 가격 예측력 확인.
+4. **메타 피처(롤링 상관계수) 분석**: 금-달러, 금-금리 관계 건강상태 모니터링.
+5. **종합 분석** (`Tools/16_comprehensive_analysis.py`): 8가지 분석 한 번에 수행.
+6. **Correlation Analysis**: 라벨과 피처 간 상관관계 분석.
+7. **Market Regime Analysis**: 추세/횡보 구간 분류 (ADX, 변동성 기반).
+
+## 레거시: 기존 분석 기법 (Phase 0 참고용)
 
 > **핵심 교훈**: 원시 지표값 + 교과서적 임계값(ADX>25, RSI<70 등)이
 > Z-Score 정규화보다 더 강건한 결과를 보였습니다.

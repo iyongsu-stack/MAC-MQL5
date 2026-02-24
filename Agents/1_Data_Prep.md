@@ -8,20 +8,38 @@
 > 모든 데이터 소비 에이전트(Analyst, Optimizer, Simulator, Strategy_Designer) 및 **제미나이(AI)**는
 > 반드시 이 에이전트가 생성한 `Files/processed/` 또는 `Files/labeled/` 경로의 Parquet 파일을 사용해야 합니다.
 > 
+> **🚨 AI 전략 개발 3대 핵심 원칙 (절대 준수)**
+> 1. **Shift+1 원칙**: 상위 타임프레임(H1 등) 매핑 시 무조건 직전 완성봉만 사용 (Look-ahead Bias 절대 방지)
+> 2. **Friction Cost 30포인트**: 데이터 분석, 승률 계산, 가설 검증 시 수익에서 무조건 30포인트 차감
+> 3. **절대값 사용 금지**: 원본 가격/금리 대신 파생 피처(Δ%, Z-score 등)만 생성/전송
+> 
 > **🤖 제미나이(AI) 필수 작업 규칙:**
 > 제미나이 역시 데이터 가공 및 전처리는 무조건 이 에이전트(`1_Data_Prep.md`)를 통해서만 진행해야 하며, 분석 및 시뮬레이션 과정에서 필요한 경우 `Agents/` 폴더 내의 에이전트 마크다운 파일들을 직접 수정(업데이트)하면서 진행해야 합니다.
 
 ---
 
-## 3계층 데이터베이스 프레임워크
+## 4계층 데이터베이스 프레임워크
+
+> **2026-02-24 업데이트:** 기존 3계층에서 매크로 데이터 경로 + VectorDB(4계층)으로 확장.
+> 상세 구조: `Docs/TrendTrading Development Strategy/ DB Framework.md` 참조.
 
 ```text
-MT5 CSV → [DuckDB: Parquet 변환] → [Polars: 지표/Slope/Accel] → [Pandas/sklearn: ML]
-                                           ↓
-                              1_Data_Prep (단일 진입점)
-                                           ↓
-                    ┌──────────┬──────────┬──────────┐
-               2_Analyst  3_Optimizer  4_Simulator  5_Strategy
+MT5 기술적 지표 + 매크로 심볼 수집
+     ↓
+  [1계층] Files/raw/              ← CSV 원본 (MT5 출력)
+          Files/raw/macro/        ← 매크로 심볼 CSV (UST10Y, EURUSD 등)
+     ↓ (변환 + 전처리)
+  [2계층] Files/processed/        ← Parquet 처리 데이터 (메인 저장소)
+          Files/processed/macro/  ← Parquet 매크로 피처 (Δ%, Z-score 변환 완료)
+     ↓ (라벨링)
+  [3계층] Files/labeled/          ← Triple Barrier 라벨 데이터
+     ↓ (피처 추출 + 벡터화)
+  [4계층] Files/vectordb/         ← VectorDB (ChromaDB) — 패턴 사전
+
+                1_Data_Prep (단일 진입점)
+                       ↓
+        ┌──────────┬──────────┬──────────┐
+   2_Analyst  3_Optimizer  4_Simulator  5_Strategy
 ```
 
 ---
@@ -32,6 +50,7 @@ MT5 CSV → [DuckDB: Parquet 변환] → [Polars: 지표/Slope/Accel] → [Panda
 | 경로 | 설명 |
 |:---|:---|
 | `Files/raw/*_DownLoad.parquet` | MQL5 지표 다운로드 데이터 (Parquet 변환 완료) |
+| `Files/raw/macro/*.csv` | MT5 매크로 심볼 CSV (UST10Y, EURUSD 등) |
 | `Files/raw/xauusd_2026.csv` | 단기 OHLCV (100MB 미만, CSV 유지) |
 | `Files/labeled/TotalResult_Labeled.csv` | 기존 레이블링 완료 데이터 |
 | `Files/archive/csv_originals/` | 원본 CSV 복구 전용 (분석 금지) |
@@ -45,12 +64,54 @@ MT5 CSV → [DuckDB: Parquet 변환] → [Polars: 지표/Slope/Accel] → [Panda
 ## Outputs (다운스트림 에이전트가 소비하는 데이터)
 | 경로 | 설명 |
 |:---|:---|
-| `Files/processed/*.parquet` | 지표 계산 완료, 분석·최적화·시뮬레이션 입력 |
-| `Files/labeled/TotalResult_Labeled.parquet` | 라벨링 완료, ML 학습 입력 |
+| `Files/processed/tech_features.parquet` | 기술적 지표 계산 완료, 분석·최적화·시뮬레이션 메인 통짜 데이터 |
+| `Files/processed/macro_features.parquet` | 매크로 피처 데이터 정제 완료 |
+| `Files/processed/labels_barrier.parquet` | Triple Barrier 라벨 데이터 |
+| `Files/vectordb/` | 벡터 DB (ChromaDB) — 패턴 사전 저장 |
 
-반드시 포함 컬럼:
-- `LRA_stdS(Small)`, `LRA_BSPScale(Small)`, `LRA_stdS(Large)`, `LRA_BSPScale(Large)`
-- `label_entry`, `label_exit` (라벨링 결과)
+---
+
+## ETL 데이터 품질 검증 원칙 (2026-02-24 추가)
+
+> **AI 학습 및 벡터 DB 임베딩의 품질은 데이터 품질에 100% 의존합니다.**
+
+| 검증 항목 | 방법 | 실패 시 조치 |
+|:---|:---|:---|
+| **결측치(Missing Values)** | `df.isnull().sum()` → 0이어야 함 | forward-fill 적용 또는 해당 행 제거 |
+| **이상치(Outliers)** | Z-score > 5인 값 탐지 | Winsorization (상하위 1% 클리핑) |
+| **타임스탬프 정합성** | 연속된 1분봉 사이 갭 확인 | 빠진 봉 보간 또는 해당 구간 제외 |
+| **타임프레임 정렬** | 매크로 피처(H1)가 M1에 올바르게 매핑되었는지 확인 | **Shift+1 원칙**: M1 현재 봉에는 직전 완성된 H1 봉만 사용 |
+| **데이터 범위** | 각 피처의 min/max가 합리적 범위 이내인지 확인 | 비정상 데이터 행 로깅 후 제거 |
+
+> [!CAUTION]
+> **Look-ahead Bias 방지:** 상위 타임프레임(H1, H4) 데이터를 M1에 매핑할 때, 반드시 **직전 완성봉(Shift+1)**의 데이터만 사용하세요.
+
+---
+
+## 매크로 데이터 전처리 파이프라인 (2026-02-24 추가)
+
+```text
+MT5 매크로 심볼 수집 (Yahoo Finance/FRED)
+     ↓
+  [1계층] Files/raw/macro/yfinance/ 및 fred/  ← CSV 원본
+     ↓ (변환 + 전처리: build_data_lake.py)
+  [2계층] Files/processed/macro_features.parquet  ← Parquet 매크로 피처
+
+전처리 규칙:
+  ❌ 금지: 원본값 그대로 저장 (금리 4.25%, EURUSD 1.0850)
+  ✅ 필수: 변화율(Δ%) 또는 롤링 Z-score로 변환 후 저장
+```
+
+6가지 파생 유형 (원본값 그대로 넣는 피처는 하나도 없어야 합니다):
+
+| 유형 | 공식 | 적용 예 |
+|------|------|---------|
+| **변화율 (Return)** | `(현재값 - n봉 전 값) / n봉 전 값` | UST10Y 1일/5일 변화율 |
+| **가속도 (Acceleration)** | `현재 변화율 - 직전 변화율` | RSI가 빨라지는 중인가? |
+| **Z-Score** | `(현재값 - 120봉 평균) / 120봉 표준편차` | VIX가 비정상적으로 높은가? |
+| **정규화 이격도** | `(현재가 - EMA) / ATR` | 이평선과의 실질적 거리 |
+| **롤링 상관계수** | `corr(A, B, window=n)` | 금-달러 관계 건강상태 |
+| **비율 (Ratio)** | `A / B` | 금/은 비율, 금/구리 비율 |
 
 ---
 
@@ -60,43 +121,40 @@ MT5 CSV → [DuckDB: Parquet 변환] → [Polars: 지표/Slope/Accel] → [Panda
 ```python
 import duckdb
 
-# CSV → Parquet 변환 (csv_to_parquet.py 참조)
+# CSV → Parquet 변환
 duckdb.query("COPY (SELECT * FROM 'Files/raw/ADXSmooth_DownLoad.csv') TO 'Files/processed/ADXSmooth.parquet' (FORMAT PARQUET, COMPRESSION ZSTD);")
 
-# Parquet에서 SQL로 필터링 (빠른 부분 조회)
-df = duckdb.query("SELECT Time, ADX, Average FROM 'Files/processed/ADXSmooth.parquet' WHERE ADX > 25").df()
+# 매크로 CSV → Parquet 변환 (전처리 포함)
+# → Files/raw/macro/ → Files/processed/macro/
 ```
 
 ### 2계층: Polars — 지표 계산 / Slope / Accel / 라벨링
 ```python
 import polars as pl
 
-# Parquet 지연 로드 (메모리 절약)
 lf = pl.scan_parquet("Files/processed/TotalResult_2026_02_19_2.parquet")
-
-# Slope(기울기) 계산
 lf = lf.with_columns([
-    (pl.col("ADX") - pl.col("ADX").shift(10)).alias("ADX_Slope"),
-    (pl.col("LRA_stdS") - pl.col("LRA_stdS").shift(10)).alias("LRA_Slope"),
+    (pl.col("ADXS_(14)_ADX") - pl.col("ADXS_(14)_ADX").shift(10)).alias("ADXS14_Slope"),
 ])
-
-# Accel(가속도 = 기울기의 기울기) 계산
-lf = lf.with_columns([
-    (pl.col("ADX_Slope") - pl.col("ADX_Slope").shift(10)).alias("ADX_Accel"),
-])
-
-df = lf.collect()  # 실제 연산 수행
-
-# 결과 Parquet 저장
+df = lf.collect()
 df.write_parquet("Files/processed/features_computed.parquet", compression="zstd")
 ```
 
-### 3계층: Pandas/sklearn — ML 학습 (필요 시)
+### 3계층: Triple Barrier 라벨링 (2026-02-24 추가)
+```python
+# Triple Barrier 설정 (스프레드 반영)
+#   TP:     ATR(14) × 1.5
+#   SL:     ATR(14) × 1.0
+#   시간:   30분 (30봉)
+#   스프레드: $0.25~$0.30 차감 후 계산
+# → Files/labeled/*.parquet
+```
+
+### 4계층: Pandas/sklearn — ML 학습 (필요 시)
 ```python
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 
-# Polars 결과물을 Pandas로 변환
 df = pl.read_parquet("Files/labeled/TotalResult_Labeled.parquet").to_pandas()
 X = df[feature_cols]
 y = df["label_entry"]
@@ -105,20 +163,55 @@ model = RandomForestClassifier().fit(X, y)
 
 ---
 
+## 현재 Parquet 컬럼 현황
+
+### TotalResult_2026_02_19_2.parquet
+
+> **최종 업데이트**: 2026-02-23  |  총 **59개 컬럼**, **3,150,208행**
+
+| 그룹 | 컬럼명 | 파라미터 |
+|:---|:---|:---|
+| OHLCV | `Time`, `Open`, `Close`, `High`, `Low`, `TickVolume` | — |
+| BOP | `BOP_Diff`, `BOP_Up1`, `BOP_Scale` | — |
+| LRA | `LRAVGST_Avg(60)_StdS`, `LRAVGST_Avg(60)_BSPScale` | period=60 |
+| LRA | `LRAVGST_Avg(180)_StdS`, `LRAVGST_Avg(180)_BSPScale` | period=180 |
+| BOPWMA | `BOPWMA_(10-3)_SmoothBOP`, `BOPWMA_(30-5)_SmoothBOP` | 10-3, 30-5 |
+| BSPWMA | `BSPWMA_(10-3)_SmoothDiffRatio`, `BSPWMA_(30-5)_SmoothDiffRatio` | 10-3, 30-5 |
+| CHV | `CHV_(10-10)_CHV/StdDev/CVScale` | Smooth=10, CHV=10 |
+| **CHV** | `CHV_(30-30)_CHV/StdDev/CVScale` | **Smooth=30, CHV=30** ✨ |
+| TDI | `TDI_(13-34-2-7)_TrSi/Signal` | RSI=13, SmRSI=2, SmSig=7 |
+| **TDI** | `TDI_(14-90-35)_TrSi/Signal` | **RSI=14, SmRSI=90, SmSig=35** ✨ |
+| QQE | `QQE_(5-14)_RSI/RsiMa/TrLevel` | SF=5, RSI=14 |
+| **QQE** | `QQE_(12-32)_RSI/RsiMa/TrLevel` | **SF=12, RSI=32** ✨ |
+| CE | `CE_Upl1/Dnl1/Upl2/Dnl2` | — |
+| CHOP | `CHOP_(14-14)_CSI/Avg/Scale` | Cho=14, Smooth=14 |
+| **CHOP** | `CHOP_(120-40)_CSI/Avg/Scale` | **Cho=120, Smooth=40** ✨ |
+| **ADXS** | `ADXS_(14)_ADX/Avg/Scale` | **period=14** ✨ |
+| **ADXS** | `ADXS_(80)_ADX/Avg/Scale` | **period=80** ✨ |
+| ADXMTF | `ADXMTF_H4_DiPlus/DiMinus/ADX` | H4 |
+| ADXMTF | `ADXMTF_M5_DiPlus/DiMinus/ADX` | M5 |
+| BWMTF | `BWMTF_H4_BWMFI/Color` | H4 |
+| BWMTF | `BWMTF_M5_BWMFI/Color` | M5 |
+
+> ✨ = 2026-02-23 추가/재계산  |  **스크립트**: `Files/Tools/update_features.py`
+
+---
+
 ## Tasks
-1. **[DuckDB] Parquet 변환**: 신규 MT5 다운로드 CSV를 `Files/processed/`로 변환 (`Tools/csv_to_parquet.py`)
-2. **[Polars] 지표 계산**: Slope, Accel 등 파생 Feature 계산 후 Parquet 저장
-3. **[Polars] 병합/라벨링**: 가격 데이터 + 매매 이력 병합, Entry/Exit 라벨링
-4. **[Pandas] Feature 생성 (Dynamic)**: `Optimizer`로부터 수신한 파라미터 적용 데이터셋 재생성
-5. **[output] 저장**: `Files/processed/*.parquet`, `Files/labeled/*.parquet`
+1. **[파이프라인] Data Lake 빌드**: 신규 다운로드 CSV(기술지표, 매크로)를 Parquet으로 일괄 변환 (`Files/Tools/build_data_lake.py` 실행)
+2. **[매크로] 전처리 보강**: 추가적인 파생 Feature (Slope, Accel 등) 계산 로직이 필요 시 파이프라인 스크립트 수정
+3. **[병합/라벨링]**: `tech_features.parquet`와 `macro_features.parquet`를 Shift+1 원칙 적용하여 병합한 후, Triple Barrier 라벨링 결과를 `labels_barrier.parquet`에 저장
+4. **[ETL] 품질 검증**: 결측치, 이상치, 타임스탬프 정합성 검증 확인
+5. **[VectorDB] 벡터화**: 확정된 피처를 벡터로 변환하여 `Files/vectordb/`에 저장
+6. **[output] 최종 목적지 확인**: `Files/processed/` 하위 3개 핵심 Parquet 및 `Files/vectordb/`
 
 ---
 
 ## Tools
 | 스크립트 | 계층 | 역할 |
 |:---|:---|:---|
-| `Files/Tools/csv_to_parquet.py` | DuckDB | CSV→Parquet 일괄 변환 (검증 포함) |
-| `Tools/1_data_loader.py` | Polars | 데이터 로드 및 병합 |
-| `Tools/2_data_labeling.py` | Polars | 라벨링 |
-| `Tools/feature_engine.py` | Polars | 동적 지표 생성 엔진 |
-| `Tools/15_longterm_backtest.py` | Pandas | 장기 데이터 로딩 (필요 시) |
+| `Files/Tools/build_data_lake.py` | Python | 기술지표/Yahoo/FRED CSV → 3개 Parquet 일괄 빌더 (전처리 포함) |
+| `Files/Tools/peek_schema.py` | Python | Parquet 스키마/데이터 초고속 확인 |
+| `Files/Tools/update_features.py` | Python | 보조 지표 계산 업데이트 |
+| `Files/Tools/fetch_macro_data.py` | Python | Yahoo Finance 매크로 수집 |
+| `Files/Tools/fetch_fred_data.py` | Python | FRED 경제 지표 수집 |

@@ -10,72 +10,9 @@ INP_AVG_PERIOD = 1000
 INP_STD_PERIOD = 4000
 INP_SMOOTH_PHASE = 0.0
 
-# --- Classes ---
-class HiAverage:
-    def __init__(self, window_size):
-        self.m_size = max(1, window_size)
-        self.m_buffer = [0.0] * self.m_size
-        self.reset()
-    
-    def reset(self):
-        self.m_index = 0
-        self.m_count = 0
-        self.m_sum = 0.0
-        self.m_buffer = [0.0] * self.m_size
-
-    def calculate(self, price):
-        if self.m_count >= self.m_size:
-            old_val = self.m_buffer[self.m_index]
-            self.m_sum -= old_val
-        else:
-            self.m_count += 1
-            
-        self.m_buffer[self.m_index] = price
-        self.m_sum += price
-        
-        if self.m_index == 0 and self.m_count > 0:
-            self.m_sum = sum(self.m_buffer[:self.m_count])
-            
-        self.m_index = (self.m_index + 1) % self.m_size
-        
-        return self.m_sum / self.m_count if self.m_count > 0 else 0.0
-
-class HiStdDev1:
-    def __init__(self, window_size):
-        self.m_size = max(1, window_size)
-        self.m_buffer = [0.0] * self.m_size
-        self.reset()
-        
-    def reset(self):
-        self.m_index = 0
-        self.m_count = 0
-        self.m_sum_sq = 0.0
-        self.m_buffer = [0.0] * self.m_size
-        self.m_last_std_value = 0.0
-
-    def calculate(self, avg_price, price):
-        if self.m_count >= self.m_size:
-            old_val = self.m_buffer[self.m_index]
-            self.m_sum_sq -= old_val
-        else:
-            self.m_count += 1
-            
-        diff = price - avg_price
-        sq_val = diff * diff
-        self.m_buffer[self.m_index] = sq_val
-        self.m_sum_sq += sq_val
-        
-        if self.m_index == 0 and self.m_count > 0:
-            self.m_sum_sq = sum(self.m_buffer[:self.m_count])
-            
-        self.m_index = (self.m_index + 1) % self.m_size
-        
-        if self.m_count < 1:
-            return 0.0
-            
-        var = self.m_sum_sq / self.m_count
-        return math.sqrt(max(0.0, var))
-
+# ---------------------------------------------------------
+# 원본의 적응형 JMA 로직 (단 성능을 위해 최적화된 형태로 클래스 복원)
+# ---------------------------------------------------------
 class JMA:
     def __init__(self):
         self.history = [] 
@@ -133,101 +70,131 @@ class JMA:
         self.history.append(current_row)
         return current_row[4]
 
+class HiAverage:
+    def __init__(self, window_size):
+        self.m_size = max(1, window_size)
+        self.m_buffer = np.zeros(self.m_size)
+        self.m_index = 0
+        self.m_count = 0
+        self.m_sum = 0.0
+
+    def calculate(self, price):
+        if self.m_count >= self.m_size:
+            old_val = self.m_buffer[self.m_index]
+            self.m_sum -= old_val
+        else:
+            self.m_count += 1
+            
+        self.m_buffer[self.m_index] = price
+        self.m_sum += price
+        
+        if self.m_index == 0 and self.m_count > 0:
+            self.m_sum = self.m_buffer[:self.m_count].sum()
+            
+        self.m_index = (self.m_index + 1) % self.m_size
+        return self.m_sum / self.m_count if self.m_count > 0 else 0.0
+
+class HiStdDev1:
+    def __init__(self, window_size):
+        self.m_size = max(1, window_size)
+        self.m_buffer = np.zeros(self.m_size)
+        self.m_index = 0
+        self.m_count = 0
+        self.m_sum_sq = 0.0
+
+    def calculate(self, avg_price, price):
+        if self.m_count >= self.m_size:
+            old_val = self.m_buffer[self.m_index]
+            self.m_sum_sq -= old_val
+        else:
+            self.m_count += 1
+            
+        diff = price - avg_price
+        sq_val = diff * diff
+        self.m_buffer[self.m_index] = sq_val
+        self.m_sum_sq += sq_val
+        
+        if self.m_index == 0 and self.m_count > 0:
+            self.m_sum_sq = self.m_buffer[:self.m_count].sum()
+            
+        self.m_index = (self.m_index + 1) % self.m_size
+        if self.m_count < 1: return 0.0
+        var = self.m_sum_sq / self.m_count
+        return math.sqrt(max(0.0, var))
+
+def compute_chop(high, low, close, cho_period, smooth_period, avg_period=1000, std_period=4000):
+    n = len(close)
+    prev_c=np.empty(n); prev_c[0]=np.nan; prev_c[1:]=close[:-1]
+    eff_h=np.maximum(high,prev_c); eff_l=np.minimum(low,prev_c)
+    bar_tr=pd.Series(eff_h-eff_l)
+    
+    # 벡터화하여 raw csi 미리 전체 계산 (이것이 이중 for문을 없애서 99% 속도를 향상시킴)
+    atr_sum=bar_tr.rolling(cho_period,min_periods=1).sum().values
+    rmh=pd.Series(eff_h).rolling(cho_period,min_periods=1).max().values
+    rml=pd.Series(eff_l).rolling(cho_period,min_periods=1).min().values
+    
+    _log=math.log(cho_period)/100.0; denom=rmh-rml
+    with np.errstate(divide='ignore',invalid='ignore'):
+        val=np.where(denom>0, atr_sum/denom, 0.0)
+        raw=np.where((val>0)&(_log!=0), np.log(np.clip(val,1e-30,None))/_log, 0.0)
+    raw=np.where(np.isfinite(raw),raw,0.0)
+    
+    # JMA, Avg, Std는 상태의존 루프 사용 (O(N) 단일 루프이므로 수 초 내 완료)
+    jma_obj = JMA()
+    hi_avg = HiAverage(avg_period)
+    hi_std = HiStdDev1(std_period)
+    
+    csi = np.zeros(n)
+    avg = np.zeros(n)
+    scale = np.zeros(n)
+    
+    for i in range(n):
+        smoothed = jma_obj.calculate(raw[i], smooth_period, INP_SMOOTH_PHASE, i)
+        csi[i] = smoothed
+        
+        a = hi_avg.calculate(smoothed)
+        avg[i] = a
+        
+        s = hi_std.calculate(a, smoothed)
+        if s != 0:
+            scale[i] = (smoothed - a) / s
+        else:
+            scale[i] = scale[i-1] if i > 0 else 0.0
+            
+    return csi, avg, scale
+
 def calculate_chopping(input_data):
-    """
-    Calculates Chopping Index indicators.
-    """
     df = None
     if isinstance(input_data, str):
         if os.path.exists(input_data):
             try:
-                df = pd.read_csv(input_data, sep='\t')
-                if len(df.columns) < 2: df = pd.read_csv(input_data)
+                df = pd.read_csv(input_data, sep='\t', low_memory=False)
+                if len(df.columns) < 2: df = pd.read_csv(input_data, low_memory=False)
             except:
-                df = pd.read_csv(input_data)
+                df = pd.read_csv(input_data, low_memory=False)
         else:
             return None
     elif isinstance(input_data, pd.DataFrame):
         df = input_data.copy()
-    else:
-        return None
+    else: return None
         
     if df is None: return None
     
-    # Normalize
     df.columns = [c.strip() for c in df.columns]
+    for col in ['High', 'Low', 'Close']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+    H = df['High'].values
+    L = df['Low'].values
+    C = df['Close'].values
     
-    jma = JMA()
-    hi_avg = HiAverage(INP_AVG_PERIOD)
-    hi_std = HiStdDev1(INP_STD_PERIOD)
+    csi, avg, scale = compute_chop(H, L, C, INP_CHO_PERIOD, INP_SMOOTH_PERIOD, INP_AVG_PERIOD, INP_STD_PERIOD)
     
-    _log = math.log(INP_CHO_PERIOD) / 100.0
-    
-    rates = len(df)
-    py_csi = []
-    py_avg = []
-    py_scale = []
-    
-    high_series = df['High'].values
-    low_series = df['Low'].values
-    close_series = df['Close'].values
-    
-    # Precompute needed values for speed?
-    # The double loop logic (k-loop) is heavy. 
-    # For now keep it as is.
-    
-    for i in range(rates):
-        max_h = high_series[i]
-        min_l = low_series[i]
-        
-        atr_sum = 0.0
-        
-        for k in range(INP_CHO_PERIOD):
-            if (i - k - 1) < 0: break
-            
-            h = high_series[i-k]
-            l = low_series[i-k]
-            prev_c = close_series[i-k-1]
-            
-            # TR
-            tr = max(h, prev_c) - min(l, prev_c)
-            atr_sum += tr
-            
-            max_h = max(max_h, max(h, prev_c))
-            min_l = min(min_l, min(l, prev_c))
-            
-        val = 0.0
-        if max_h != min_l: val = atr_sum / (max_h - min_l)
-        
-        csi_raw = 0.0
-        if val != 0: csi_raw = math.log(val) / _log
-        
-        # Smoothing
-        smoothed = jma.calculate(csi_raw, INP_SMOOTH_PERIOD, INP_SMOOTH_PHASE, i)
-        py_csi.append(smoothed)
-        
-        # Average
-        avg = hi_avg.calculate(smoothed)
-        py_avg.append(avg)
-        
-        # StdDev
-        std = hi_std.calculate(avg, smoothed)
-        
-        # Scale
-        scale = 0.0
-        if std != 0:
-            scale = (smoothed - avg) / std
-        else:
-            if i > 0: scale = py_scale[-1]
-            else: scale = 0.0
-            
-        py_scale.append(scale)
-        
-    df['Py_CSI'] = py_csi
-    df['Py_Avg'] = py_avg
-    df['Py_Scale'] = py_scale
+    df['Py_CSI'] = csi
+    df['Py_Avg'] = avg
+    df['Py_Scale'] = scale
     
     return df
 
 if __name__ == '__main__':
-    print("Running Chopping Test...")
+    print("Running Fast Chopping Test...")
