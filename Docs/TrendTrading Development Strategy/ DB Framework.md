@@ -27,7 +27,7 @@ links:
 > 1. **Shift+1 원칙**: Data Lake 2계층(`macro_features`)은 원본 날짜 그대로 저장하며, M1 타임프레임과 병합 시 반드시 1봉 Shift 하여 미래참조를 방지한다.
 > 2. **Friction Cost 30포인트**: Triple Barrier 라벨 디스크립터(`labels_barrier.parquet`) 생성 및 시뮬레이션 시 `friction_cost` 30.0pt 차감을 기본으로 규정한다.
 > 3. **절대값 사용 금지**: 원본 데이터(가격/금리)는 1계층(raw)에만 머무르며, AI가 조회하는 상위 계층에는 파생 피처(변환값) 형태만 저장된다.
-> 4. **Warm-up dropna 필수**: `macro_features.parquet`의 각 자산별 첫 ~120행은 rolling(120) 등으로 인한 NaN이 포함됨. **M1과 병합하는 모든 스크립트에서 반드시 `dropna(subset=macro_feature_cols)`를 호출**하여 불완전 데이터를 제거해야 한다. 2계층에서는 절대 dropna 하지 않는다.
+> 4. **Warm-up dropna 필수**: `macro_features.parquet`의 각 자산별 첫 ~1440행은 rolling(1440) 등으로 인한 NaN이 포함됨. **M1과 병합하는 모든 스크립트에서 반드시 `dropna(subset=macro_feature_cols)`를 호출**하여 불완전 데이터를 제거해야 한다. 2계층에서는 절대 dropna 하지 않는다.
 > 5. **ffill 정책**: 2계층 매크로 피처는 시장별 휴일 차이로 인한 NaN을 `ffill`(직전 거래일 값 유지)로 처리함. `bfill`(역방향 채움)은 미래참조이므로 **절대 사용 금지**.
 
 # 프로젝트 데이터베이스 프레임워크
@@ -49,7 +49,7 @@ MT5 기술적 지표 + 매크로 심볼(Yahoo/FRED) 수집
      ↓ (Python 스크립트: build_data_lake.py - 변환 + 파생 피처 계산)
   [2계층] Files/processed/            ← Data Lake 핵심 저장소 (Parquet 메인)
           tech_features.parquet       ← M1 기술 지표
-          macro_features.parquet      ← 매크로 피처 (변화율, Z-score, 기울기 등)
+          macro_features.parquet      ← 매크로 피처 (변화율, 멀티스케일 Z-score 60/240/1440, 기울기 등)
           labels_barrier.parquet      ← Triple Barrier 정답지 (AI 학습 Y)
      ↓ (피처 추출 + 벡터화)
   [4계층] Files/vectordb/             ← VectorDB (ChromaDB) — 패턴 사전 저장
@@ -95,9 +95,11 @@ MT5 기술적 지표 + 매크로 심볼(Yahoo/FRED) 수집
 
 | 파일 (.parquet) | 내용 | 행/컬럼/용량 기준 | 업데이트 주기 |
 |:---|:---|:---|:---|
-| `tech_features` | M1 차트 기술 지표 (ADX, BOP, BWMFI 등) | 315만 행 / 63 컬럼 / 약 1GB | 매일 (MT5 스크립트) |
-| `macro_features` | 매크로 파생 피처 (변화율, Z-score 360종) | 8.6천 행 / 360 컬럼 / 약 10MB | 매주 (yfinance+FRED) |
-| `labels_barrier`| Triple Barrier 기준 수익/손절/시간 정답지 | - | 라벨링 로직 수정 시 |
+| `tech_features` | M1 차트 기술 지표 원본 (ADX, BOP, BWMFI 등) | 315만 행 / 63 컬럼 / 약 1GB | 매일 (MT5 스크립트) |
+| `tech_features_derived` | 기술 지표 파생 변환 (Z-score Shift+1, MTF 변화점, CE ratio) | 315만 행 / ~94 컬럼 / 약 1.2GB | `build_tech_derived.py` 실행 시 |
+| `macro_features` | 매크로 파생 피처 (변화율, 멀티스케일 Z-score 480종) | 8.6천 행 / 360 컬럼 / 약 14MB | 매주 (yfinance+FRED) |
+| `labels_barrier`| Triple Barrier 기준 수익/손절/시간 정답지 (Long/Short 분리) | ~24만 행 / 9 컬럼 | 라벨링 로직 수정 시 |
+| `AI_Study_Dataset` | **최종 AI 학습 데이터셋** (Tech+Macro Shift+1+Label 병합) | 315만 행 / ~460 컬럼 / 약 1.1GB | `/data-build` 워크플로우 실행 시 |
 
 ### raw/ (CSV, 수집 원본)
 
@@ -120,7 +122,7 @@ ORDER BY time DESC
 LIMIT 30;
 
 -- 매크로 데이터 특정 기간 컬럼 선택
-SELECT Date, "UST10Y_ret1d", "DXY_zscore"
+SELECT Date, "UST10Y_ret1d", "DXY_zscore_240"
 FROM read_parquet('.../processed/macro_features.parquet')
 WHERE Date >= '2024-01-01'
 ORDER BY Date ASC;
@@ -166,4 +168,4 @@ python Files/Tools/peek.py Files/processed/TotalResult_2026_02_19_2.parquet Time
 > M1 분봉과 H1 일봉 데이터를 함께 참조하기 위해 Python 환경에서 Chunk 사이즈로 분할 읽기 또는 분산 병합을 적극 활용하세요.
 
 > [!NOTE]
-> `labels_barrier.parquet`은 현재 빈 템플릿 파일이 생성된 상태입니다. M1 기술 지표 데이터 세트 위에서 Triple Barrier 로직을 실행하여 정답(`1, 0, -1`) 라벨을 채워야 실질적인 AI 모델 학습이 가능합니다.
+> `labels_barrier.parquet`은 `build_labels_barrier.py`로 생성되며, Long/Short 분리 라벨(약 24만 행)이 포함되어 있습니다. 파라미터 변경 시 `/data-build` 워크플로우를 재실행하여 전체 파이프라인을 재빌드하세요.

@@ -50,7 +50,7 @@ MT5 기술적 지표 + 매크로 심볼 수집
           Files/raw/macro/        ← 매크로 심볼 CSV (UST10Y, EURUSD 등)
      ↓ (변환 + 전처리)
   [2계층] Files/processed/        ← Parquet 처리 데이터 (메인 저장소)
-          Files/processed/macro/  ← Parquet 매크로 피처 (Δ%, Z-score 변환 완료)
+          Files/processed/macro/  ← Parquet 매크로 피처 (Δ%, 멀티스케일 Z-score 60/240/1440 변환 완료)
      ↓ (라벨링)
   [3계층] Files/labeled/          ← Triple Barrier 라벨 데이터
      ↓ (피처 추출 + 벡터화)
@@ -109,9 +109,16 @@ MT5 기술적 지표 + 매크로 심볼 수집
    - 데이터를 분석하거나 피처를 만들 때 원본 절대값(가격, 금리 4.25%, EURUSD 1.08 등)을 그대로 투입하는 오류를 절대 방지해야 합니다. 반드시 상대적 스케일을 갖는 파생 피처(변화율 Δ%, 롤링 Z-Score, 이평선과의 이격도, 기울기(Slope), 가속도(Accel) 등)로 변환하여 사용해야 합니다.
 
 ### 부가 원칙
-- **Triple Barrier 라벨링 선행 필수**: 인간의 주관적 라벨 → Triple Barrier로 객관 채점 → AI 학습.
+- **🎯 확정된 전략 구조 (2026-02-27)**: Setup(딱 1개) → AI 학습 → TrailingStop 청산
+  ```
+  Setup:   LRAVGST_Avg(180)_BSPScale > 1.0  (황금 구간 — 이 조건에서만 진입 후보)
+  AI:      눌림목 / 타이밍 / 진입 여부 전부 480개 피처로 AI가 학습하여 결정
+  청산:    TrailingStopVx 전담 (고정 TP 사용 안 함)
+  ```
+- **ATR 동적 배리어 라벨링 선행 필수**: `LRAVGST_Avg(180)_BSPScale > 1.0` 황금 구간에서만 라벨 생성. 배리어: TP=ATR×1.0 / SL=ATR×1.2 / 45봉. **실전 청산은 TrailingStopVx 전담** (AI는 진입만 학습).
 - **메가 피처 풀 투입**: 구할 수 있는 모든 피처를 처음부터 전부 투입. AI가 핵심 피처를 알아서 추출.
 - **Walk-Forward 3단계 검증**: Step 1(2개월) → Step 2(1년) → Step 3(10년). 모두 통과해야 실전 투입.
+
 
 ---
 

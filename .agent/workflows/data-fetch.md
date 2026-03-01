@@ -9,7 +9,7 @@ description: XAUUSD 백테스트용 매크로+기술 데이터 수집 — 다중
 
 > [!IMPORTANT]
 > **🚨 AI 전략 개발 3대 핵심 원칙 (절대 준수)**
-> 1. **Shift+1 원칙**: 이 워크플로우로 수집된 상위 타임프레임(매크로) 데이터는 M1에 매핑 시 무조건 직전 완성봉만 사용해야 함. (`build_data_lake.py`에서 `macro.shift(1)`로 데이터단에서 자체 적용 완료)
+> 1. **Shift+1 원칙**: 이 워크플로우로 수집된 상위 타임프레임(매크로) 데이터는 M1에 매핑 시 무조건 직전 완성봉만 사용해야 함. (`merge_features.py`에서 병합 직전 `df_macro[features].shift(1)` 적용)
 > 2. **Friction Cost 30포인트**: 수집된 데이터로 AI 학습 데이터 생성 시 `friction_cost`를 최하 30포인트 차감 적용 필수.
 > 3. **절대값 사용 금지**: 원본 환율/금리를 그대로 쓰지 않고 `build_data_lake.py`에서 변화율(Δ%)/Z-score/가속도 파생 피처로 자체 변환되어 저장됨.
 

@@ -13,6 +13,15 @@ AI 패턴 마이닝 및 검증 전문가 (AI Pattern Mining & Walk-Forward Valid
 > 1. **Shift+1 원칙**: 상위 타임프레임 맵핑 정합성 필수 검증 (Look-ahead Bias 방지)
 > 2. **Friction Cost 30포인트**: 훈련 성능(Train/Val/Test) 검증 시 30포인트를 마찰 비용으로 간주한 후 수익률 측정
 > 3. **절대값 최적화 금지**: 트리기반(LightGBM) 파라미터 분기가 절대값 피처에서 발생하지 않도록 확인
+>
+> ### 🎯 확정된 전략 구조 (2026-02-27)
+> ```
+> Setup(1개):  LRAVGST_Avg(180)_BSPScale > 1.0  ← 학습 황금 구간 필터
+> AI 학습:     눌림목 여부 / 타이밍 / 진입 결정 → 480개 피처로 AI가 학습
+> 청산:        TrailingStopVx 전담 (고정 TP 사용 안 함)
+> ```
+> **최적화 범위**: Setup 필터 통과 봉(황금 구간)에서만 학습/검증 수행.
+
 
 ---
 
@@ -23,14 +32,16 @@ AI 패턴 마이닝 및 검증 전문가 (AI Pattern Mining & Walk-Forward Valid
 
 ### 핵심 흐름
 ```
-정답지(Y): Triple Barrier 결과 (1=수익, 0=손실)
+정답지(Y): ATR 동적 배리어 결과 — label_long(1/0), label_short(1/0) 분리
 모든 피처(X): 기술(M1/M5) + 매크로(H1) + 세션
-      ↓ 통째로 투입
-LightGBM 학습
+      ↓ 롱 모델 · 숏 모델 각각 투입
+LightGBM 학습 (방향별 독립)
       ↓
-SHAP 분석 → 핵심 피처 3~5개 자동 추출
+방향별 SHAP 분석 → 롱/숏 핵심 피처 각각 3~5개 자동 추출
       ↓
 핵심 패턴(Centroid Vector) 도출 → 벡터 DB 등록
+      ↓
+model_long.onnx + model_short.onnx → 단일 EA (진입만 학습, 청산은 TrailingStopVx 전담)
 ```
 
 ### Walk-Forward 3단계 검증

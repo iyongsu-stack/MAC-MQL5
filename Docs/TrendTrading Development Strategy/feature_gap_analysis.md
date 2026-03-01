@@ -83,7 +83,7 @@
 |:---:|:---|:---|:---|:---|
 | 1 | **기울기 (Slope)** | N봉 전 대비 변화량 | 모든 지표 (ADX, QQE_RSI, TDI, CHV, BOP, CE 등) | `slope = val[0] − val[N]` (N=10) |
 | 2 | **기울기의 기울기 (가속도)** | 기울기의 변화 속도 | 기울기가 계산된 모든 지표 | `accel = slope[0] − slope[N]` (N=10) |
-| 3 | **롤링 Z-score** | 최근 N주기 대비 상대 위치 | 모든 연속형 지표 (CHOP_CSI, ADX, QQE_RSI 등) | `(val − mean_N) / std_N` (N=120) |
+| 3 | **롤링 Z-score (멀티스케일)** | 최근 N주기 대비 상대 위치 | 모든 연속형 지표 (CHOP_CSI, ADX, QQE_RSI 등) | `(val − mean_N) / std_N` (N=60, 240, 1440) |
 | 4 | **변화율 (Δ%)** | 백분율 변화 | Close, TickVolume, CE_Upl, CE_Dnl | `(val[0] − val[N]) / val[N] × 100` |
 | 5 | **ATR 정규화 이격도** | 이평선과의 거리를 ATR로 나눔 | Close vs LRAVGST_Avg | `(Close − LRA_Avg) / ATR(14)` |
 | 6 | **랭크 스케일링** | 최근 N주기 내 백분위 순위 | 변동성 극심한 지표 (CHV, BWMFI) | `rank(val, N) / N` (N=120) |

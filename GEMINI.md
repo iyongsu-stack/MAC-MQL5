@@ -11,6 +11,7 @@
 - `Profiles/Templates/`: 백테스트용 템플릿 (`.tpl`)
 - `Files/`: 4계층 데이터 파이프라인 (아래 참조)
 - `Agents/`: AI 에이전트 역할 정의 (Data_Prep, Analyst, Optimizer, Simulator, Strategy_Designer)
+- `Ontology/`: **온톨로지 및 그래프 DB 관련 모든 산출물 전용 폴더**. (관련 문서, 지식 그래프 데이터, 쿼리 스크립트 등 일체는 프로젝트 무결성을 위해 반드시 이 폴더 내에만 작성되어야 함)
 - `Docs/TrendTrading Development Strategy/`: **마스터 문서** (개발 방향의 단일 진실 공급원)
 
 ### 4계층 데이터 파이프라인 (Data Lake 아키텍처)
@@ -20,11 +21,13 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
   [1계층] Files/raw/
           Files/raw/macro/yfinance/   ← Yahoo Finance CSV 41개 (지수/외환/원자재)
           Files/raw/macro/fred/       ← FRED CSV 19개 (실질금리/기대인플레/스프레드)
-     ↓ (변환 + 파생 피처 계산: Δ%, Z-score, 기울기, 가속도)
+     ↓ (변환 + 파생 피처 계산: Δ%, 멀티스케일 Z-score 60/240/1440, 기울기, 가속도)
   [2계층] Files/processed/
-          tech_features.parquet       ← M1 기술 지표 63컬럼 (3,150,208행)
-          macro_features.parquet      ← 매크로 360컬럼 (8,651행, Shift+1 전처리)
-          labels_barrier.parquet      ← Triple Barrier 정답지 (AI 학습 Y)
+          tech_features.parquet       ← M1 기술 지표 63컬럼 원본 (3,150,208행)
+          tech_features_derived.parquet ← 기술 지표 파생 변환 완료 (Z-score Shift+1 적용)
+          macro_features.parquet      ← 매크로 360컬럼 (8,651행, 변환 완료)
+          labels_barrier.parquet      ← ATR 동적 배리어 정답지 (label_long/label_short, ~24만행)
+          AI_Study_Dataset.parquet    ← 최종 AI 학습 데이터셋 (Tech+Macro Shift+1+Label 병합)
      ↓ (피처 추출 + 벡터화)
   [4계층] Files/vectordb/             ← VectorDB (ChromaDB) — 패턴 사전
 ```
@@ -33,9 +36,13 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 | 스크립트 | 역할 | 실행 방법 |
 | :--- | :--- | :--- |
 | `Files/Tools/fetch_macro_data.py` | Yahoo Finance 41개 매크로 수집 | `python fetch_macro_data.py` |
-| `Files/Tools/fetch_fred_data.py` | FRED 19개 경제 지표 수집 (키: `1d5e09b7dcc74795825486551d4cea4b`) | `python fetch_fred_data.py` |
+| `Files/Tools/fetch_fred_data.py` | FRED 19개 경제 지표 수집 | `python fetch_fred_data.py` |
 | `Files/Tools/build_data_lake.py` | CSV → Parquet + 파생 피처 빌드 | `python build_data_lake.py` |
-| `Files/Tools/peek_schema.py` | Parquet 스키마 초고속 확인 | `python peek_schema.py` |
+| `Files/Tools/build_tech_derived.py` | 기술 지표 파생 변환 (Z-score 등) | `python build_tech_derived.py` |
+| `Files/Tools/build_labels_barrier.py`| Triple Barrier 동적 라벨링 | `python build_labels_barrier.py` |
+| `Files/Tools/merge_features.py` | Tech + Macro + Label 초정밀 병합 | `python merge_features.py` |
+| `Files/Tools/verify_merged_dataset.py`| 병합 무결성(Shift+1 검증) | `python verify_merged_dataset.py` |
+| `Files/Tools/peek_schema.py` | Parquet 스키마/데이터 초고속 확인 | `python peek_schema.py` |
 
 > 데이터 수집이 필요할 때는 `/data-fetch` 워크플로우(`.agent/workflows/data-fetch.md`)를 참조한다.
 
@@ -91,11 +98,18 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
    - 데이터를 분석하거나 피처를 만들 때 원본 절대값(가격, 금리 4.25%, EURUSD 1.08 등)을 그대로 투입하는 오류를 절대 방지해야 합니다. 반드시 상대적 스케일을 갖는 파생 피처(변화율 Δ%, 롤링 Z-Score, 이평선과의 이격도, 기울기(Slope), 가속도(Accel) 등)로 변환하여 사용해야 합니다.
 
 ### 부가 원칙
-- **Triple Barrier 라벨링 선행 필수**: 인간의 주관적 라벨 → Triple Barrier로 객관 채점 → AI 학습.
+- **🎯 확정된 전략 구조 (2026-02-27)**: Setup(딱 1개) → AI 학습 → TrailingStop 청산
+  ```
+  Setup:   LRAVGST_Avg(180)_BSPScale > 1.0  (황금 구간 — 이 조건에서만 진입 후보)
+  AI:      눌림목 / 타이밍 / 진입 여부 전부 480개 피처로 AI가 학습하여 결정
+  청산:    TrailingStopVx 전담 (고정 TP 사용 안 함)
+  ```
+- **ATR 동적 배리어 라벨링 선행 필수**: `LRAVGST_Avg(180)_BSPScale > 1.0` 황금 구간에서만 라벨 생성. 배리어: TP=ATR×1.0 / SL=ATR×1.2 / 45봉. **실전 청산은 TrailingStopVx 전담** (AI는 진입만 학습).
 - **메가 피처 풀 투입**: 구할 수 있는 모든 피처를 처음부터 전부 투입. AI가 핵심 피처를 알아서 추출.
-- **BOPWMA/BSPWMA 지표**: 누적 합(Cumulative Sum) 로직이므로 절대값 레벨 0 기준 비교 금지. 기울기/가속도만 사용.
-- **Walk-Forward 3단계 검증**: Step 1(2개월) → Step 2(1년) → Step 3(10년). 모두 통과해야 실전 투입.
+- **BOPWMA/BSPWMA 지표**: 누적 합 로직 → **금지**: 절대 레벨 비교(>0), Δ%, 원본값 Z-Score. **허용**: 기울기, 가속도, 기울기의 Z-Score, Δ(절대 차분), 롤링 백분위, 가격 대비 다이버전스.
+- **Walk-Forward 3단계 검증**: Step 1(2개월) → Step 2(1년) → Step 3(최대 가용 데이터). 모두 통과해야 실전 투입.
 - **Safety**: `GetLastError()` 필수, StopLoss/TrailingStop 항상 포함.
+
 
 ## 4. Environment & Tools
 **Build Command**:
@@ -120,6 +134,12 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 - **Tools**: `mt5_symbol_info` (가격), `mt5_copy_rates_from` (차트), `mt5_order_send` (주문)
 - **Purpose**: "XAUUSD 현재가 조회", "잔고 확인", "0.01랏 매수" 등 실시간 작업.
 - **Execute**: `uv run fastmcp dev src/mcp_mt5/main.py` (MQL5/mcp-metatrader5-server 폴더)
+
+### C. 지식 그래프 DB (Neo4j) 실시간 연동 (CRITICAL)
+- **자동 기록 (Write)**: 대화 중 도출된 새로운 규칙(`StrategyRule`), 아이디어(`Idea`), 마일스톤(`Milestone`)은 마크다운 자산(`Idea_Log.md` 등) 업데이트와 함께, **반드시 AI가 직접 Neo4j DB에 Cypher 쿼리를 실행하여 노드/엣지를 동기화**해야 한다.
+- **도구 (Execution)**: Neo4j HTTP API를 래핑한 커스텀 FastMCP 활용 (Bolt 드라이버의 네트워킹 버그 우회)
+  - `uv run fastmcp dev Ontology/Tools/mcp_neo4j_http.py` (MQL5 폴더에서 실행하여 MCP 환경에 등록 및 Tools 활성화)
+- **자동 참조 (Read)**: 복잡한 아키텍처나 기능 간 의존성 추적이 필요할 때, 파일 검색 전에 먼저 Cypher 쿼리를 날려 Neo4j DB 관계도를 조회하고 맥락을 장착한다.
 
 ## 6. Autonomous Policy (사용자 검토 우선 정책)
 

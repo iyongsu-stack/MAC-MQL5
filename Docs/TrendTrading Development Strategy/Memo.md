@@ -11,8 +11,10 @@
 | 파일 | 내용 | 행수 | 컬럼수 | 크기 | 업데이트 주기 |
 |:---|:---|:---:|:---:|:---:|:---|
 | [tech_features.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/tech_features.parquet) | M1 기술 지표 (ADX, QQE, BWMFI 등) | 3,150,208 | 63 | 1.0 GB | 매일 |
-| [macro_features.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/macro_features.parquet) | 매크로 60종 × 파생 피처 (변화율/Z-score/기울기) | 8,651 | 360 | 10.5 MB | 매주 |
-| [labels_barrier.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/labels_barrier.parquet) | Triple Barrier 정답지 (AI 학습용 Y) | 0 (템플릿) | 7 | - | 라벨링 실행 시 |
+| [tech_features_derived.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/tech_features_derived.parquet) | 기술 지표 파생 변환 (Z-score Shift+1 적용) | 3,150,208 | ~94 | 1.2 GB | 파생 스크립트 실행 시 |
+| [macro_features.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/macro_features.parquet) | 매크로 파생 피처 (변화율/멀티스케일 Z-score) | 8,651 | 360 | 14 MB | 매주 |
+| [labels_barrier.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/labels_barrier.parquet) | Triple Barrier 정답지 (Long/Short 분리) | ~240,000 | 9 | - | 라벨링 로직 수정 시 |
+| [AI_Study_Dataset.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/AI_Study_Dataset.parquet) | **최종 AI 학습 데이터셋** | 3,150,208 | ~460 | 1.1 GB | 병합 워크플로우 실행 시 |
 
 ---
 
@@ -119,8 +121,8 @@
 
 ## 다음 단계
 
-1. **전처리 파이프라인**: `Files/processed/macro_features.parquet`와 `tech_features.parquet`를 Shift+1으로 M1 타임스탬프 기준 병합
-2. **Triple Barrier 라벨링**: 병합 데이터로 AI 학습용 정답지 생성 (`labels_barrier.parquet`)
+1. **전처리 파이프라인**: `tech_features.parquet`를 기반으로 `tech_features_derived.parquet` 파생, 이후 `macro_features.parquet`를 Shift+1으로 M1 타임스탬프 기준 병합.
+2. **ATR 동적 배리어 라벨링(학습용)**: M1 데이터 + ATR(14) 기반 동적 TP/SL(1.0/1.2, 45봉)로 진입 타이밍 정답지 생성 (`labels_barrier.parquet`). 최종 `AI_Study_Dataset.parquet`로 모두 병합 완료. 실전 청산은 트레일링스탑 전담.
 3. **LightGBM + SHAP**: 메가 피처 풀(360개 매크로 + 63개 기술) → 핵심 3~5개 피처 추출
 4. **Walk-Forward 3단계 검증**: Step1(2개월 마이닝) → Step2(1년 OOS) → Step3(10년)
 
@@ -159,7 +161,9 @@
 | `_ret1d` | 1일 수익률 (%) | `pct_change(1) * 100` |
 | `_ret5d` | 5일 수익률 (%) | `pct_change(5) * 100` |
 | `_ret21d` | 21일 수익률 (%) | `pct_change(21) * 100` |
-| `_zscore` | 120일 롤링 Z-Score | `(Close - rolling(120).mean) / rolling(120).std` |
+| `_zscore_60` | 60일 롤링 Z-Score (1시간) | `(Close - rolling(60).mean) / rolling(60).std` |
+| `_zscore_240` | 240일 롤링 Z-Score (4시간) | `(Close - rolling(240).mean) / rolling(240).std` |
+| `_zscore_1440` | 1440일 롤링 Z-Score (1일) | `(Close - rolling(1440).mean) / rolling(1440).std` |
 | `_slope` | 10일 기울기 | `diff(10) / 10` |
 | `_accel` | 가속도 (기울기의 변화) | `slope.diff(10)` |
 
@@ -242,7 +246,80 @@
 | `SP500_ret1d` | -1.038565 | -1.038565 | PASS |
 | `SP500_ret5d` | 0.023114 | 0.023113 | PASS |
 | `SP500_ret21d` | -1.093538 | -1.093538 | PASS |
-| `SP500_zscore` | 0.401036 | 0.401036 | PASS |
-| `SP500_slope` | -9.454981 | -9.454980 | PASS |
+| `SP500_zscore_60` | 0.401036 | 0.401036 | PASS |
+| `SP500_zscore_240` | 0.231201 | 0.231201 | PASS |
+| `SP500_zscore_1440`| 0.113401 | 0.113401 | PASS |
+| `SP500_slope`  | -0.00164 | -0.00164 | PASS |
 
 > **결론**: `build_data_lake.py`의 `calc_macro_features()` 함수가 원본 CSV에서 정확하게 파생 피처를 계산하여 Parquet에 저장하고 있음을 확인. float32 다운캐스팅에 의한 미세 오차(< 0.000001)만 존재하며 품질에 영향 없음.
+
+
+### 🛠️ 피처 엔지니어링 실전 원칙
+1. 공선성 검증: 상관계수 **0.85** 이상인 피처 쌍은 하나로 합치거나 제거. Tie-Breaker: Target(Y)과의 MI가 낮은 쪽 제거
+2. 피처 선택: 메가 풀 → SHAP 자동 추출(주력) + Ablation Study(새 지표 검증용 보조)
+3. 파생 피처 6가지 유형: 변화율, 가속도, 멀티스케일 Z-Score(60/240/1440), 정규화 이격도, 롤링 상관계수, 비율 — 원본값 절대 금지
+4. Tick Volume: 멀티피리어드 비율로 투입 — MA(60) 1시간 / MA(240) 4시간 / MA(1440) 1일 대비 비율 3개를 피처로 생성 (세션별 거래량 계절성 반영, 절대값 금지)
+5. 세션 인코딩: 트리 모델은 One-hot, 딥러닝은 sin/cos 순환 인코딩
+6. 롱/숏 분리 학습 + 단일 EA 통합:
+   - Stage A: 롱 모델(label_long)과 숏 모델(label_short)을 처음부터 분리 학습 → 방향별 SHAP으로 피처 중요도 희석 방지
+   - Stage B: Walk-Forward 3단계 검증 (각 모델 독립). 숏 모델 데이터 부족 시 scale_pos_weight 보정
+   - Stage C: `model_long.onnx` + `model_short.onnx`를 하나의 MQL5 EA에 로드, 비대칭 임계치(롱 > 0.55 & 숏 > 0.70) + 상충 시 관망
+   - Stage D (선택): 매크로 피처가 SHAP 상위권일 경우 게이트키퍼 레이어 추가
+7. 피처 안정성 모니터링: PSI(Population Stability Index)로 분포 변화 추적, PSI > 0.25이면 불안정 → 재학습 트리거. Walk-Forward 단계 간 피처 중요도 순위 급변 시 과적합 경고
+8. 다중 검정 보정: 수백 개 피처 동시 테스트 시 BH-FDR(Benjamini-Hochberg) 보정 적용 필수. SHAP 상위 피처도 5-Fold 중 3회 이상 상위권 등장하는 것만 채택 (순위 안정성)
+9. 이상치 처리: 금 시장 꼬리 리스크 극단적(Z-Score ±10 이상 가능) → Winsorization 상하 1~5% 클리핑. 제거가 아닌 클리핑으로 극단 이벤트 정보 보존 (딥러닝은 필수, 트리 모델은 선택)
+10. 캘린더/이벤트 피처: 요일·월·시간을 sin/cos 순환 인코딩. 월말 리밸런싱 플래그(is_month_end_5days), FOMC/NFP 전후 48시간 원핫 플래그 투입
+11. 피처 중요도 시간적 일관성: 전체 기간 SHAP 1회가 아닌 분기별 SHAP 비교. 특정 분기에만 중요한 피처는 레짐 의존적 → 항상 투입 vs 레짐 조건부 투입 결정
+
+### 🗄️ 벡터 DB 임베딩 전략
+1. 스케일링된 피처를 슬라이딩 윈도우(기본 M1 30봉) 단위로 벡터화하여 ChromaDB에 저장
+2. 기초 인프라 구축 → 메타 라벨링 강화 → 에이전트 메모리 통합 (단계적 활용)
+3. 임베딩 전에 반드시 Z-Score/랭크 스케일링 완료 필수 (원본값 벡터화 시 유사도 왜곡)
+4. 멀티스케일 윈도우 4계층: M1 30봉(30분, 즉시 진입 시그널) + M1 240봉(4시간, 세션 방향 확인) + H1 24봉(1일, 일간 추세) + H1 120봉(1주, 레짐/매크로 컨텍스트) 4계층 임베딩 병렬 저장, 검색 시 스케일별 유사도 가중 합산
+5. 메타데이터 동시 저장: session(아시아/유럽/미국), volatility_percentile(ATR 백분위), label_result(TP/SL/Timeout) → 메타데이터 필터링 후 유사도 검색. 레짐 판별 방식은 추후 복합 지표(ADX+ChopIndex+ATR Z-Score) 기반으로 별도 설계
+
+
+[학습 구간 (IS)]
+  2012~2015 (하락장 숏) + 2019~2021 (상승장 롱)
+[검증 구간 (OOS)]
+  2004~2011 (약 8년)  ← 최초 유효 시점부터의 대상승/서브프라임 레짐
+  2016~2018 (약 3년)  ← 횡보 레짐
+  2022~2024 (약 3년)  ← 금리급등/신고가 레짐
+[최종 백테스트]
+  2004~2024 (약 20년 전체 구간)
+
+  2017년 이후 데이터만 제대로 다운로드 됨....
+
+
+  병합 결과 요약
+생성된 파일: AI_Study_Dataset.parquet
+
+이제 이 24만 개의 데이터로 label_long과 label_short를 450여 개의 파생 피처들을 사용하여 각각 이진 분류 학습(LightGBM) 시키면 됩니다.
+
+다음 단계인 AI 학습과 SHAP 분석 등을 진행할까요? 어떻게 도와드릴까요?
+
+
+## 라벨링 결과 승률
+라벨 통계
+구간	방향	대상 봉	TP(성공)	FAIL	승률	평균 수익률       
+하락장(2012~2015)	   Long (>1.0)	58	20	38	34.5%	-0.502%
+                    Short (<-1.0)	413	236	177	57.1%	+0.099%
+상승장(2019~2021)	   Long (>1.0)	126,634	69,336	57,298	54.8%	-0.018%
+                    Short (<-1.0)	113,424	61,476	51,948	54.2%	+0.003%
+
+
+
+
+
+##후보 A(LightGBM + Purged K-Fold)  <---- 학습방법
+1. SHAP 분산 왜곡 방지 (다중공선성 사전 제거 - Feature Pruning)
+문제점: 우리가 생성한 460개의 피처 중 상당수는 수리적으로 매우 유사합니다. (예: ADX_Slope와 ADX_Accel, 혹은 특정 Z-score의 60주기와 240주기 등). 트리 모델(LightGBM)은 이런 중복 피처가 있어도 예측은 잘 해냅니다. 하지만 SHAP 중요도를 뽑을 때 심각한 왜곡이 발생합니다. 진짜 핵심 피처 1개의 기여도가 3개의 유사 피처로 분산(100% → 33%, 33%, 34%)되면서, 하위권으로 밀려나 버릴 수 있습니다.
+대안 (필수): SHAP 분석을 돌리기 직전에, 피처 간의 스피어만 상관계수(Spearman Correlation)나 계층적 군집화(Hierarchical Clustering)를 통해 상관계수가 0.95 이상인 중복 피처군을 찾아내고, 그중 하나만 남기는 사전 프루닝(Pruning) 작업을 스크립트에 반드시 포함시켜야 합니다.
+2. 비대칭 손실 함수 적용 (Custom Asymmetric Loss)
+문제점: 일반적인 머신러닝의 목적 함수(Logloss)는 예측이 틀렸을 때의 페널티를 동일하게 매깁니다. 하지만 트레이딩에서는 그렇지 않습니다.
+진입 기회를 놓친 경우 (False Negative): 계좌 타격 없음 (기회비용뿐)
+섣불리 진입해서 손절친 경우 (False Positive): 실제 자본 손실 (-SL - 30pt Friction)
+대안: LightGBM을 학습시킬 때 기본 손실 함수 대신, 섣부른 진입(거짓 양성)에 더 무거운 페널티를 부여하는 **비대칭 포컬 로스(Asymmetric Focal Loss)**나 사용자 정의 손실 함수를 깎아서(Custom Objective) 넣어야 합니다. 그래야 AI가 확실한 자리가 아니면 방아쇠를 당기지 않는 '진짜 스나이퍼'로 성장합니다.
+3. 롤링 윈도우 기반 연속 학습 (Walk-Forward Continual Learning)
+문제점: 2012년부터 2026년까지의 데이터를 한 번의 K-Fold(5등분)로 섞어버리면, 제로금리 시대(20122020)의 패턴이 고금리/인플레 시대(20222026)의 예측을 방해할 수 있습니다. 시장 레짐(Regime)은 변합니다.
+대안: 전체 데이터를 한 번에 학습하는 것이 아니라, 최근 3년으로 학습 → 다음 6개월 예측(검증) 창을 14년간 계속 밀고 나가는 진정한 의미의 연속적 Walk-Forward 교차 검증 파이프라인을 짜야 합니다. (이는 메모에 적어주신 '상승장/하락장 승률이 다르다'는 통찰과도 정확히 맞닿아 있습니다.)

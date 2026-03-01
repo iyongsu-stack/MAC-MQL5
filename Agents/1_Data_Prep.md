@@ -12,7 +12,15 @@
 > 1. **Shift+1 원칙**: 상위 타임프레임(H1 등) 매핑 시 무조건 직전 완성봉만 사용 (Look-ahead Bias 절대 방지)
 > 2. **Friction Cost 30포인트**: 데이터 분석, 승률 계산, 가설 검증 시 수익에서 무조건 30포인트 차감
 > 3. **절대값 사용 금지**: 원본 가격/금리 대신 파생 피처(Δ%, Z-score 등)만 생성/전송
-> 
+>
+> ### 🎯 확정된 전략 구조 (2026-02-27)
+> ```
+> Setup(1개):  LRAVGST_Avg(180)_BSPScale > 1.0  ← 라벨링 황금 구간 필터
+> AI 학습:     눌림목 여부 / 타이밍 / 진입 결정 → 480개 피처로 AI가 학습
+> 청산:        TrailingStopVx 전담 (고정 TP 사용 안 함)
+> ```
+> **라벨링 시 반드시 준수**: `LRAVGST_Avg(180)_BSPScale > 1.0` 조건 충족 봉에서만 라벨 생성.
+
 > **🤖 제미나이(AI) 필수 작업 규칙:**
 > 제미나이 역시 데이터 가공 및 전처리는 무조건 이 에이전트(`1_Data_Prep.md`)를 통해서만 진행해야 하며, 분석 및 시뮬레이션 과정에서 필요한 경우 `Agents/` 폴더 내의 에이전트 마크다운 파일들을 직접 수정(업데이트)하면서 진행해야 합니다.
 
@@ -64,9 +72,11 @@ MT5 기술적 지표 + 매크로 심볼 수집
 ## Outputs (다운스트림 에이전트가 소비하는 데이터)
 | 경로 | 설명 |
 |:---|:---|
-| `Files/processed/tech_features.parquet` | 기술적 지표 계산 완료, 분석·최적화·시뮬레이션 메인 통짜 데이터 |
-| `Files/processed/macro_features.parquet` | 매크로 피처 데이터 정제 완료 |
-| `Files/processed/labels_barrier.parquet` | Triple Barrier 라벨 데이터 |
+| `Files/processed/tech_features.parquet` | 기술적 지표 원본 (63개 컬럼, M1 분봉) |
+| `Files/processed/tech_features_derived.parquet` | 기술적 지표 파생 변환 완료 (~94개 피처, Z-score Shift+1 적용) |
+| `Files/processed/macro_features.parquet` | 매크로 피처 데이터 정제 완료 (360개 파생 피처) |
+| `Files/processed/labels_barrier.parquet` | Triple Barrier 라벨 데이터 (Long/Short 분리, ~24만 행) |
+| `Files/processed/AI_Study_Dataset.parquet` | **최종 AI 학습 데이터셋** (Tech+Macro+Label 병합, ~460컬럼) |
 | `Files/vectordb/` | 벡터 DB (ChromaDB) — 패턴 사전 저장 |
 
 ---
@@ -77,11 +87,13 @@ MT5 기술적 지표 + 매크로 심볼 수집
 
 | 검증 항목 | 방법 | 실패 시 조치 |
 |:---|:---|:---|
-| **결측치(Missing Values)** | `df.isnull().sum()` → 0이어야 함 | forward-fill 적용 또는 해당 행 제거 |
-| **이상치(Outliers)** | Z-score > 5인 값 탐지 | Winsorization (상하위 1% 클리핑) |
+| **결측치(Missing Values)** | `df.isnull().sum()` → 0이어야 함 | forward-fill 적용(`limit=4`, bfill 금지) 또는 해당 행 제거 |
+| **이상치(Outliers)** | Z-score > 5인 값 탐지 | **Winsorization 상하 1% 클리핑** (제거 금지, 비대칭 분포 시 개별 조정) |
 | **타임스탬프 정합성** | 연속된 1분봉 사이 갭 확인 | 빠진 봉 보간 또는 해당 구간 제외 |
 | **타임프레임 정렬** | 매크로 피처(H1)가 M1에 올바르게 매핑되었는지 확인 | **Shift+1 원칙**: M1 현재 봉에는 직전 완성된 H1 봉만 사용 |
 | **데이터 범위** | 각 피처의 min/max가 합리적 범위 이내인지 확인 | 비정상 데이터 행 로깅 후 제거 |
+| **PSI 모니터링** | Walk-Forward 단계 간 피처 분포 안정성 측정 | **PSI > 0.25 → 불안정 피처 → 재학습 트리거** |
+| **캔린더 피처** | 요일/월/시간 sin/cos 순환 인코딩 + 월말 플래그 + FOMC/NFP 48h 원핫 | 정수 인코딩 금지 (트리 모델 순서 학습 오류 방지) |
 
 > [!CAUTION]
 > **Look-ahead Bias 방지:** 상위 타임프레임(H1, H4) 데이터를 M1에 매핑할 때, 반드시 **직전 완성봉(Shift+1)**의 데이터만 사용하세요.
@@ -108,7 +120,7 @@ MT5 매크로 심볼 수집 (Yahoo Finance/FRED)
 |------|------|---------|
 | **변화율 (Return)** | `(현재값 - n봉 전 값) / n봉 전 값` | UST10Y 1일/5일 변화율 |
 | **가속도 (Acceleration)** | `현재 변화율 - 직전 변화율` | RSI가 빨라지는 중인가? |
-| **Z-Score** | `(현재값 - 120봉 평균) / 120봉 표준편차` | VIX가 비정상적으로 높은가? |
+| **Z-Score (멀티스케일)** | `(현재값 - N봉 평균) / N봉 표준편차` (N=60,240,1440) | 멀티스케일 이상 감지 (1시간/4시간/1일) |
 | **정규화 이격도** | `(현재가 - EMA) / ATR` | 이평선과의 실질적 거리 |
 | **롤링 상관계수** | `corr(A, B, window=n)` | 금-달러 관계 건강상태 |
 | **비율 (Ratio)** | `A / B` | 금/은 비율, 금/구리 비율 |
@@ -140,14 +152,17 @@ df = lf.collect()
 df.write_parquet("Files/processed/features_computed.parquet", compression="zstd")
 ```
 
-### 3계층: Triple Barrier 라벨링 (2026-02-24 추가)
+### 3계층: ATR 동적 배리어 라벨링 — 학습 전용 (2026-02-27 갱신)
 ```python
-# Triple Barrier 설정 (스프레드 반영)
-#   TP:     ATR(14) × 1.5
-#   SL:     ATR(14) × 1.0
-#   시간:   30분 (30봉)
-#   스프레드: $0.25~$0.30 차감 후 계산
-# → Files/labeled/*.parquet
+# ATR 동적 배리어 설정 (학습용 진입 타이밍 정답지)
+#   TP:     ATR(14) × 1.0 (방향성 관성 판별)
+#   SL:     ATR(14) × 1.2 (노이즈 필터링)
+#   시간:   45봉 (45분)
+#   Friction: 30pt 차감 (A2 원칙)
+#   라벨: label_long(1/0), label_short(1/0) 분리
+#   실전 청산은 트레일링스탑 전담 (AI는 진입만 학습)
+# → Files/processed/labels_barrier.parquet
+# → 스크립트: Files/Tools/build_labels_barrier.py
 ```
 
 ### 4계층: Pandas/sklearn — ML 학습 (필요 시)
@@ -211,6 +226,10 @@ model = RandomForestClassifier().fit(X, y)
 | 스크립트 | 계층 | 역할 |
 |:---|:---|:---|
 | `Files/Tools/build_data_lake.py` | Python | 기술지표/Yahoo/FRED CSV → 3개 Parquet 일괄 빌더 (전처리 포함) |
+| `Files/Tools/build_tech_derived.py` | Python | 기술 지표 파생 변환 (Z-score Shift+1, MTF 변화점, CE ratio) |
+| `Files/Tools/build_labels_barrier.py` | Python | Triple Barrier 라벨링 (ATR×1.0/1.2, 45봉, Friction 30pt) |
+| `Files/Tools/merge_features.py` | Python | Tech+Macro(Shift+1)+Labels 병합 → AI_Study_Dataset.parquet |
+| `Files/Tools/verify_merged_dataset.py` | Python | 병합 무결성 검증 (Shift+1, MTF, Label 정합성) |
 | `Files/Tools/peek_schema.py` | Python | Parquet 스키마/데이터 초고속 확인 |
 | `Files/Tools/update_features.py` | Python | 보조 지표 계산 업데이트 |
 | `Files/Tools/fetch_macro_data.py` | Python | Yahoo Finance 매크로 수집 |
