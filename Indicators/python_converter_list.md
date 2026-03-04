@@ -16,6 +16,7 @@
 | 12 | Indicators/Test/ChandelieExitDownLoad.mq5 | chandelier_exit_verifier.py | |
 | 13 | Indicators/Test/ChoppingIndexDownLoad.mq5 | chopping_verifier.py | |
 | 14 | Indicators/Test/ADXSmoothMTFDownLoad.mq5 | ADXSmoothMTF_Converter.py | |
+| 15 | Indicators/Test/ATRDownLoad.mq5 | ATR_Verifier.py | g_ATRPeriod = 14 |
 15. **BWMFI MTF (Market Facilitation Index)**
     - **Script:** `BWMFI_MTF_Converter.py`
     - **MQL5:** `BWMFI_MTF.mq5` / `BWMFI_MTFDownLoad.mq5`

@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "47c15198676852b0",
+        "id": "8347206a408b9df1",
         "type": "tabs",
         "children": [
           {
-            "id": "d846e04009d21f96",
+            "id": "5ec60eb7ff81dcb1",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Docs/TrendTrading Development Strategy/XAUUSD_AI_전략개발_종합_로드맵.md",
+                "file": "Docs/TrendTrading Development Strategy/long_labeling_70pct_report.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "XAUUSD_AI_전략개발_종합_로드맵"
+              "title": "long_labeling_70pct_report"
             }
           }
         ]
@@ -44,7 +44,7 @@
                 "autoReveal": false
               },
               "icon": "lucide-folder-closed",
-              "title": "Files"
+              "title": "파일 탐색기"
             }
           },
           {
@@ -174,33 +174,34 @@
   },
   "left-ribbon": {
     "hiddenItems": {
-      "switcher:Open quick switcher": false,
-      "graph:Open graph view": false,
-      "canvas:Create new canvas": false,
-      "daily-notes:Open today's daily note": false,
-      "templates:Insert template": false,
-      "command-palette:Open command palette": false,
-      "bases:Create new base": false
+      "switcher:빠른 전환기 열기": false,
+      "graph:그래프 뷰 열기": false,
+      "canvas:새 캔버스 만들기": false,
+      "daily-notes:오늘의 일일 노트 열기": false,
+      "templates:템플릿 삽입": false,
+      "command-palette:명령어 팔레트 열기": false,
+      "bases:새 베이스 생성하기": false
     }
   },
-  "active": "d846e04009d21f96",
+  "active": "bfd0d48385dd2216",
   "lastOpenFiles": [
-    "Files/Tools/build_result.txt",
-    "Files/Tools/temp_check_220.py",
-    "Files/Tools/diag.txt",
-    "Files/Tools/verify_full_result.txt",
-    "Files/Tools/verify_full_macro.py",
-    "Files/Tools/verify_result.txt",
-    "Files/Tools/verify_macro_parquet.py",
-    "Files/Tools/get_xauusd_info2.py",
-    "Files/Tools/get_xauusd_info.py",
     "Files/processed/labels_barrier.parquet",
-    "Files/processed/tech_features.parquet",
+    "Files/processed/macro_features.parquet",
+    "Ontology/Tools/upsert_fe_rules.py",
+    "Ontology/Tools/upsert_rules.py",
+    "Ontology/Tools/__pycache__/cypher_cli.cpython-314.pyc.2822087994672",
+    "Ontology/Tools/tmp_query.cypher",
+    "Files/processed/tech_features_derived.parquet",
+    "Files/Tools/schema_out.txt",
     "Docs/TrendTrading Development Strategy/Memo.md",
+    "Files/Tools/sim_duka_verify.py",
+    "Files/raw/ATR_DownLoad.csv",
+    "Files/raw/dukascopy/XAUUSD.csv",
+    "Docs/TrendTrading Development Strategy/long_labeling_70pct_report.md",
+    "Docs/TrendTrading Development Strategy/XAUUSD_AI_전략개발_종합_로드맵.md",
     "Docs/TrendTrading Development Strategy/feature_gap_analysis.md",
     "Docs/DataBase/Parquet_Visualizer_매뉴얼.md",
     "Docs/TrendTrading Development Strategy/ DB Framework.md",
-    "Docs/TrendTrading Development Strategy/XAUUSD_AI_전략개발_종합_로드맵.md",
     "Docs/TrendTrading Development Strategy/XAUUSD_AI_피처_완전_가이드.md",
     "Docs/DataBase/Position Data Sample.md",
     "Files/Tools/Parquit 파일 보기.md",

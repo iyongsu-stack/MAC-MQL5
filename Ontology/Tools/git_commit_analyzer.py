@@ -1,7 +1,7 @@
 """
-Git Commit → Neo4j 자동 분석기
+Git Commit → Graph DB 자동 분석기
 ================================
-post-commit Hook에서 호출되어, 변경 파일을 분석하고 Neo4j에 저장합니다.
+post-commit Hook에서 호출되어, 변경 파일을 분석하고 SQL Server Graph DB에 저장합니다.
 - 파일 경로 기반 엔티티 분류 (FrameworkModule, Indicator, Script 등)
 - diff에서 파라미터 변경 감지 (숫자 변경 추적)
 - include/import 추가/삭제 감지 (의존성 변화)
@@ -156,19 +156,19 @@ def analyze_diff(diff_text, filepath):
     return insights
 
 # ======================================
-# 4. Neo4j 저장
+# 4. Graph DB 저장
 # ======================================
 
-def save_to_neo4j(commit_info, file_analyses):
-    """커밋 정보와 파일 분석 결과를 Neo4j에 저장"""
+def save_to_db(commit_info, file_analyses):
+    """커밋 정보와 파일 분석 결과를 SQL Server Graph DB에 저장"""
     safe_hash = commit_info["hash"]
     safe_short = commit_info["short"]
     safe_msg = commit_info["message"].replace("'", "\\'").replace('"', '\\"')
     safe_time = commit_info["timestamp"][:19]  # ISO 문자열의 날짜+시간 부분만
     
-    # Commit 노드 생성
+    # Commit 노드 생성 (hash를 name으로 사용)
     q = f"""
-    MERGE (c:Commit {{hash: '{safe_hash}'}})
+    MERGE (c:Commit {{name: '{safe_hash}'}})
     SET c.short_hash = '{safe_short}',
         c.message = '{safe_msg}',
         c.author = '{commit_info["author"]}',
@@ -185,26 +185,12 @@ def save_to_neo4j(commit_info, file_analyses):
         rel_type = status_map.get(fa["status"], "MODIFIED")
         summary = "; ".join(fa.get("insights", []))[:500].replace("'", "\\'")
         
-        if label:
-            q = f"""
-            MATCH (c:Commit {{hash: '{safe_hash}'}})
-            MERGE (f:{label} {{name: '{fname}'}})
-            MERGE (c)-[r:{rel_type}]->(f)
-            SET r.summary = '{summary}',
-                r.path = '{fa["path"].replace(chr(92), "/").replace("'", "\\'")}',
-                r.created_at = datetime('{safe_time}'),
-                f.updated_at = datetime('{safe_time}')
-            """
-        else:
-            # 분류 안 되는 파일은 일반 노드로
-            q = f"""
-            MATCH (c:Commit {{hash: '{safe_hash}'}})
-            MERGE (f:DataArtifact {{name: '{fname}'}})
-            MERGE (c)-[r:{rel_type}]->(f)
-            SET r.summary = '{summary}',
-                r.path = '{fa["path"].replace(chr(92), "/").replace("'", "\\'")}',
-                r.created_at = datetime('{safe_time}')
-            """
+        target_label = label or "DataArtifact"
+        safe_path = fa['path'].replace(chr(92), '/').replace("'", "\\'")
+        # 파일 노드 생성/업데이트
+        run_cypher(f"MERGE (f:{target_label} {{name: '{fname}'}}) SET f.path = '{safe_path}', f.updated_at = datetime('{safe_time}')")
+        # Commit → 파일 관계
+        q = f"MATCH (c:Commit {{name: '{safe_hash}'}}) MATCH (f:{target_label} {{name: '{fname}'}}) MERGE (c)-[:{rel_type}]->(f)"
         run_cypher(q)
 
 # ======================================
@@ -213,7 +199,7 @@ def save_to_neo4j(commit_info, file_analyses):
 
 def main():
     print("=" * 50)
-    print("  Git Commit → Neo4j 자동 분석기")
+    print("  Git Commit → Graph DB 자동 분석기")
     print("=" * 50)
     
     commit = get_commit_info()
@@ -254,13 +240,13 @@ def main():
             "insights": insights,
         })
     
-    # Neo4j 저장
-    print(f"\n💾 Neo4j 저장 중...")
+    # Graph DB 저장
+    print(f"\n💾 Graph DB 저장 중...")
     try:
-        save_to_neo4j(commit, file_analyses)
+        save_to_db(commit, file_analyses)
         print(f"  ✅ 커밋 [{commit['short']}] + {len(file_analyses)}개 파일 관계 저장 완료!")
     except Exception as e:
-        print(f"  ⚠️ Neo4j 저장 실패 (DB 미실행?): {e}")
+        print(f"  ⚠️ Graph DB 저장 실패 (DB 미실행?): {e}")
         # Hook은 실패해도 git commit을 안 막음
     
     print(f"{'=' * 50}")

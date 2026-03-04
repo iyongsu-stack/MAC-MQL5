@@ -127,8 +127,8 @@ def calculate_adx_smooth_mtf(df, target_timeframe='4h', period=14, alpha1=0.25, 
     for i in range(1, rates_total):
         # Level 1 Smoothing
         val_p = 2 * pdi[i] + (alpha1 - 2) * pdi[i-1] + (1 - alpha1) * last_p
-        val_m = 2 * ndi[i] + (alpha1 - 2) * ndi[i-1] + (1 - ALPHA1) * last_m
-        val_a = 2 * adx_raw[i] + (alpha1 - 2) * adx_raw[i-1] + (1 - ALPHA1) * last_a
+        val_m = 2 * ndi[i] + (alpha1 - 2) * ndi[i-1] + (1 - alpha1) * last_m
+        val_a = 2 * adx_raw[i] + (alpha1 - 2) * adx_raw[i-1] + (1 - alpha1) * last_a
         
         last_p, last_m, last_a = val_p, val_m, val_a
         
