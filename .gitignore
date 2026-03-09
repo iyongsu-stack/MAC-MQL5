@@ -22,3 +22,18 @@
 # --- 운영체제 관련 ---
 Thumbs.db
 .DS_Store
+
+# --- macOS 숨김 메타데이터 파일 ---
+._.DS_Store
+._*
+**/._.DS_Store
+
+# --- Python 캐시 ---
+__pycache__/
+*.pyc
+*.pyo
+.my_tool_sandbox/
+
+# --- 환경 설정 (민감 정보) ---
+.env
+*.env
