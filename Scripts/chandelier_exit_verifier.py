@@ -63,10 +63,8 @@ def calculate_chandelier(input_data):
     min_low = df['min_low'].values
     atr = df['atr'].values
 
-    py_upl1 = np.full(n, np.nan)
-    py_dnl1 = np.full(n, np.nan)
-    py_upl2 = np.full(n, np.nan)
-    py_dnl2 = np.full(n, np.nan)
+    py_ce1 = np.full(n, np.nan)
+    py_ce2 = np.full(n, np.nan)
 
     curr_hi1_work = np.nan
     curr_lo1_work = np.nan
@@ -111,22 +109,22 @@ def calculate_chandelier(input_data):
         final_hi1_work = raw_hi1
         if new_trend1 == 1:
             if raw_hi1 < prev_hi1_work: final_hi1_work = prev_hi1_work
-            py_upl1[i] = final_hi1_work
+            py_ce1[i] = final_hi1_work
         
         final_lo1_work = raw_lo1
         if new_trend1 == -1:
             if raw_lo1 > prev_lo1_work: final_lo1_work = prev_lo1_work
-            py_dnl1[i] = final_lo1_work
+            py_ce1[i] = final_lo1_work
 
         final_hi2_work = raw_hi2
         if new_trend2 == 1:
             if raw_hi2 < prev_hi2_work: final_hi2_work = prev_hi2_work
-            py_upl2[i] = final_hi2_work
+            py_ce2[i] = final_hi2_work
 
         final_lo2_work = raw_lo2
         if new_trend2 == -1:
             if raw_lo2 > prev_lo2_work: final_lo2_work = prev_lo2_work
-            py_dnl2[i] = final_lo2_work
+            py_ce2[i] = final_lo2_work
 
         curr_trend1 = new_trend1
         curr_trend2 = new_trend2
@@ -135,13 +133,11 @@ def calculate_chandelier(input_data):
         curr_hi2_work = final_hi2_work
         curr_lo2_work = final_lo2_work
 
-    df['Py_Upl1'] = py_upl1
-    df['Py_Dnl1'] = py_dnl1
-    df['Py_Upl2'] = py_upl2
-    df['Py_Dnl2'] = py_dnl2
+    df['Py_CE1'] = py_ce1
+    df['Py_CE2'] = py_ce2
     
     return df
 
 if __name__ == "__main__":
     print("Running Chandelier Verifier...")
-    # csv_path = ...
+

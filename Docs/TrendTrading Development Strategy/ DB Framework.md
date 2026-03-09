@@ -1,6 +1,6 @@
 ---
 created: 2026-02-19
-updated: 2026-02-24
+updated: 2026-03-09
 tags:
   - 데이터베이스
   - Parquet
@@ -23,36 +23,39 @@ links:
 ---
 
 > [!IMPORTANT]
-> **🚨 Data Lake 및 DB 아키텍처 5대 핵심 원칙 (절대 준수)**
+> **🚨 Data Lake 및 DB 아키텍처 6대 핵심 원칙 (절대 준수)**
 > 1. **Shift+1 원칙**: Data Lake 2계층(`macro_features`)은 원본 날짜 그대로 저장하며, M1 타임프레임과 병합 시 반드시 1봉 Shift 하여 미래참조를 방지한다.
-> 2. **Friction Cost 30포인트**: Triple Barrier 라벨 디스크립터(`labels_barrier.parquet`) 생성 및 시뮬레이션 시 `friction_cost` 30.0pt 차감을 기본으로 규정한다.
+> 2. **Friction Cost 30포인트**: CE Trailing Stop 라벨(`labels_barrier.parquet`) 생성 및 시뮬레이션 시 `friction_cost` 30.0pt 차감을 기본으로 규정한다.
 > 3. **절대값 사용 금지**: 원본 데이터(가격/금리)는 1계층(raw)에만 머무르며, AI가 조회하는 상위 계층에는 파생 피처(변환값) 형태만 저장된다.
 > 4. **Warm-up dropna 필수**: `macro_features.parquet`의 각 자산별 첫 ~1440행은 rolling(1440) 등으로 인한 NaN이 포함됨. **M1과 병합하는 모든 스크립트에서 반드시 `dropna(subset=macro_feature_cols)`를 호출**하여 불완전 데이터를 제거해야 한다. 2계층에서는 절대 dropna 하지 않는다.
 > 5. **ffill 정책**: 2계층 매크로 피처는 시장별 휴일 차이로 인한 NaN을 `ffill`(직전 거래일 값 유지)로 처리함. `bfill`(역방향 채움)은 미래참조이므로 **절대 사용 금지**.
+> 6. **Z-score + pct 병행 필수** ★: Z-score는 레짐 전환 시 스케일 불일치를 유발함. 모든 핵심 피처에 **롤링 퍼센타일 랭크(pct240/pct1440)**를 병행 생성하여 OOS 일반화 성능을 보장한다.
 
 # 프로젝트 데이터베이스 프레임워크
 
-> 최종 업데이트: 2026-02-24
+> 최종 업데이트: 2026-03-09
 
 ---
 
 ## 1. 전체 구조 (4계층 파이프라인 & Data Lake 아키텍처)
 
-> **2026-02-24 업데이트:** 프로젝트 표준 Data Lake 파이프라인(3 Parquet 도메인 분리)으로 전면 개편.
+> **2026-03-09 업데이트:** 프로젝트 표준 Data Lake 파이프라인 완성. A+B+C 통합 모델 학습 완료 (AUC=0.8298, OOS 3/3 PASS).
 
 ```
-MT5 기술적 지표 + 매크로 심볼(Yahoo/FRED) 수집
+MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
      ↓
   [1계층] Files/raw/
           Files/raw/macro/yfinance/   ← Yahoo Finance CSV 41개 (지수/외환/원자재)
           Files/raw/macro/fred/       ← FRED CSV 19개 (실질금리/기대인플레/스프레드)
-     ↓ (Python 스크립트: build_data_lake.py - 변환 + 파생 피처 계산)
+     ↓ (Python 스크립트: build_data_lake.py + build_tech_derived.py)
   [2계층] Files/processed/            ← Data Lake 핵심 저장소 (Parquet 메인)
-          tech_features.parquet       ← M1 기술 지표
-          macro_features.parquet      ← 매크로 피처 (변화율, 멀티스케일 Z-score 60/240/1440, 기울기 등)
-          labels_barrier.parquet      ← Triple Barrier 정답지 (AI 학습 Y)
+          tech_features.parquet       ← M1 기술 지표 원본 (63컬럼, 742만행)
+          tech_features_derived.parquet ← 기술 지표 파생 변환 (Z-score+pct240 Shift+1, 165컬럼)
+          macro_features.parquet      ← 매크로 파생 피처 (652컬럼, Δ%+Z-score+Slope)
+          labels_barrier.parquet      ← CE Trailing Stop 정답지 (label_long, ~742만행)
+          AI_Study_Dataset.parquet    ← 최종 AI 학습 데이터셋 (817컬럼, 266만행)
      ↓ (피처 추출 + 벡터화)
-  [4계층] Files/vectordb/             ← VectorDB (ChromaDB) — 패턴 사전 저장
+  [4계층] Files/vectordb/             ← VectorDB (ChromaDB) — 패턴 사전
      → 상세 구조: [[ DB Framework+ VectorDB]] 참조
 ```
 
@@ -95,11 +98,11 @@ MT5 기술적 지표 + 매크로 심볼(Yahoo/FRED) 수집
 
 | 파일 (.parquet) | 내용 | 행/컬럼/용량 기준 | 업데이트 주기 |
 |:---|:---|:---|:---|
-| `tech_features` | M1 차트 기술 지표 원본 (ADX, BOP, BWMFI 등) | 315만 행 / 63 컬럼 / 약 1GB | 매일 (MT5 스크립트) |
-| `tech_features_derived` | 기술 지표 파생 변환 (Z-score Shift+1, MTF 변화점, CE ratio) | 315만 행 / ~94 컬럼 / 약 1.2GB | `build_tech_derived.py` 실행 시 |
-| `macro_features` | 매크로 파생 피처 (변화율, 멀티스케일 Z-score 480종) | 8.6천 행 / 360 컬럼 / 약 14MB | 매주 (yfinance+FRED) |
-| `labels_barrier`| Triple Barrier 기준 수익/손절/시간 정답지 (Long/Short 분리) | ~24만 행 / 9 컬럼 | 라벨링 로직 수정 시 |
-| `AI_Study_Dataset` | **최종 AI 학습 데이터셋** (Tech+Macro Shift+1+Label 병합) | 315만 행 / ~460 컬럼 / 약 1.1GB | `/data-build` 워크플로우 실행 시 |
+| `tech_features` | M1 차트 기술 지표 원본 (ADX, BOP, BWMFI 등) | 742만 행 / 63 컬럼 / 약 1GB | 매일 (MT5 스크립트) |
+| `tech_features_derived` | 기술 지표 파생 변환 (Z-score+**pct240/1440** Shift+1, MTF 변화점, CE ratio) | 742만 행 / **165 컬럼** / 약 2GB | `build_tech_derived.py` 실행 시 |
+| `macro_features` | 매크로 파생 피처 (변화율, 멀티스케일 Z-score, Slope) | 8,651행 / **652 컬럼** / 약 25MB | 매주 (yfinance+FRED) |
+| `labels_barrier`| **CE Trailing Stop** 기준 수익/손절 정답지 (Long 전용) | ~742만 행 / 9 컬럼 | 라벨링 로직 수정 시 |
+| `AI_Study_Dataset` | **최종 AI 학습 데이터셋** (Tech Derived+Macro Shift+1+Label 병합) | **266만 행** / **817 컬럼** / 약 1.35GB | `/data-build` 워크플로우 실행 시 |
 
 ### raw/ (CSV, 수집 원본)
 
@@ -168,4 +171,18 @@ python Files/Tools/peek.py Files/processed/TotalResult_2026_02_19_2.parquet Time
 > M1 분봉과 H1 일봉 데이터를 함께 참조하기 위해 Python 환경에서 Chunk 사이즈로 분할 읽기 또는 분산 병합을 적극 활용하세요.
 
 > [!NOTE]
-> `labels_barrier.parquet`은 `build_labels_barrier.py`로 생성되며, Long/Short 분리 라벨(약 24만 행)이 포함되어 있습니다. 파라미터 변경 시 `/data-build` 워크플로우를 재실행하여 전체 파이프라인을 재빌드하세요.
+> `labels_barrier.parquet`은 `build_labels_barrier.py`로 생성되며, CE Trailing Stop 기반 Long 전용 라벨(약 742만 행)이 포함되어 있습니다. 파라미터 변경 시 `/data-build` 워크플로우를 재실행하여 전체 파이프라인을 재빌드하세요.
+
+---
+
+## 8. AI 학습 결과 요약 (2026-03-09)
+
+> A+B+C 통합 모델 학습 완료. 상세: `롱 학습결과 분석.md` 참조.
+
+| 항목 | 결과 |
+|:---|:---|
+| 입력 데이터 | `AI_Study_Dataset.parquet` (817컬럼, 266만행) |
+| 1라운드 | Spearman 0.85 Pruning(811→419) + LightGBM 5-Fold + SHAP Top-60 |
+| 2라운드 | A+B+C 통합 (pct+단조+레짐) → 80개 피처, AUC **0.8298** |
+| OOS 검증 | 3/3 PASS (thr=0.20 기준 승률 ≥45%) |
+| 실전 조합 | M30_DiPlus>35 + thr=0.25 → **승률 56.3%, 월 ~15건** |

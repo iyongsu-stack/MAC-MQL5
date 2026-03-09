@@ -17,7 +17,7 @@
 //+------------------------------------------------------------------+
 void OnStart()
 {
-  string Filename = "filename.csv";
+  string Filename = "P30k1_trades.csv";
   
 // 다운로드 받은 파일을 읽으면 처음 케리터를 잘못 읽는다. 따라서 다운로드 받아서 filename.csv 파일로 카피-> 페이스 해야 된다.    
   CDKSimplestCSVReader CSVFile; // Create class object

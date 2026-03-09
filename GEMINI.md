@@ -1,5 +1,17 @@
 # GEMINI.md
 
+## 🎯 프로젝트 전략 목표 (항상 참조)
+1. **거래 횟수**: 롱전략 + 숏전략 + Reversal 전략 통틀어 **일주일 3~4회**
+2. **전략 구성**: 롱/숏/Reversal은 **별도 프로젝트**로 개발 → 최종 3개 전략 통합
+3. **이번 프로젝트 목표**: **롱전략 개발** + 수익 극대화를 위한 **피라미딩 전략** 개발
+4. **승률**: 70~80% 목표
+5. **수익**: 월 평균 **20% 수익률** 목표
+6. **리스크**: 매 포지션 **1% 이하** 리스크
+7. **핵심 설계 철학**:
+   - 포지션 진입 시 **승률은 높고, 보장 수익은 커야** 한다
+   - 진입 빈도 제한은 감수한다
+   - **승률 70~80% 이상 보장 조건**에서만 진입, 수익률은 **피라미딩으로 극대화**
+
 ## 1. Project & AI Quant Trading System
 **Goal**: AI 주도 XAUUSD 퀀트 트레이딩 시스템 개발 (BSP Framework 기반 EA + AI 패턴 마이닝)
 **Core**: **BSP Framework** (모듈식 트레이딩 시스템, `Include/BSPVx/`)
@@ -23,11 +35,11 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
           Files/raw/macro/fred/       ← FRED CSV 19개 (실질금리/기대인플레/스프레드)
      ↓ (변환 + 파생 피처 계산: Δ%, 멀티스케일 Z-score 60/240/1440, 기울기, 가속도)
   [2계층] Files/processed/
-          tech_features.parquet       ← M1 기술 지표 63컬럼 원본 (3,150,208행)
-          tech_features_derived.parquet ← 기술 지표 파생 변환 완료 (Z-score Shift+1 적용)
-          macro_features.parquet      ← 매크로 360컬럼 (8,651행, 변환 완료)
-          labels_barrier.parquet      ← ATR 동적 배리어 정답지 (label_long/label_short, ~24만행)
-          AI_Study_Dataset.parquet    ← 최종 AI 학습 데이터셋 (Tech+Macro Shift+1+Label 병합)
+          tech_features.parquet       <- M1 기술 지표 63컬럼 원본 (7,424,421행)
+          tech_features_derived.parquet <- 기술 지표 파생 변환 (Z-score+pct240 Shift+1, 165컬럼)
+          macro_features.parquet      <- 매크로 652컬럼 (8,651행, 변환 완료)
+          labels_barrier.parquet      <- ATR 동적 배리어 정답지 (label_long, ~742만행)
+          AI_Study_Dataset.parquet    <- 최종 AI 학습 데이터셋 (817컬럼, 266만행)
      ↓ (피처 추출 + 벡터화)
   [4계층] Files/vectordb/             ← VectorDB (ChromaDB) — 패턴 사전
 ```
@@ -38,10 +50,13 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 | `Files/Tools/fetch_macro_data.py` | Yahoo Finance 41개 매크로 수집 | `python fetch_macro_data.py` |
 | `Files/Tools/fetch_fred_data.py` | FRED 19개 경제 지표 수집 | `python fetch_fred_data.py` |
 | `Files/Tools/build_data_lake.py` | CSV → Parquet + 파생 피처 빌드 | `python build_data_lake.py` |
-| `Files/Tools/build_tech_derived.py` | 기술 지표 파생 변환 (Z-score 등) | `python build_tech_derived.py` |
+| `Files/Tools/build_tech_derived.py` | 기술 지표 파생 변환 (Z-score+pct240/pct1440) | `python build_tech_derived.py` |
 | `Files/Tools/build_labels_barrier.py`| Triple Barrier 동적 라벨링 | `python build_labels_barrier.py` |
 | `Files/Tools/merge_features.py` | Tech + Macro + Label 초정밀 병합 | `python merge_features.py` |
 | `Files/Tools/verify_merged_dataset.py`| 병합 무결성(Shift+1 검증) | `python verify_merged_dataset.py` |
+| `Files/Tools/train_round1.py` | 1라운드: Spearman Pruning + SHAP Top-60 | `python train_round1.py` |
+| `Files/Tools/train_round2_ABC.py` | 2라운드: A+B+C 통합 모델 (AUC=0.8298) | `python train_round2_ABC.py` |
+| `Files/Tools/extract_ABC_signals.py` | 신호 CSV 추출 (M30>35+thr=0.25) | `python extract_ABC_signals.py` |
 | `Files/Tools/peek_schema.py` | Parquet 스키마/데이터 초고속 확인 | `python peek_schema.py` |
 
 > 데이터 수집이 필요할 때는 `/data-fetch` 워크플로우(`.agent/workflows/data-fetch.md`)를 참조한다.
@@ -87,29 +102,77 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 ## 3. Operational Rules (CRITICAL)
 - **Language Policy**: **모든 상호작용(대화/생각/주석)은 한국어(Korean)로 진행.** (코드는 영어)
 
-### 🚨 AI 전략 개발 3대 핵심 원칙 (절대 준수) 🚨
-> 이 3가지 원칙은 모든 스크립트 작성, 데이터 분석, 모델 학습, 시뮬레이션, 승률 계산에 **자동으로** 그리고 **예외 없이** 적용되어야 합니다.
+### 🚨 데이터베이스 작성 7대 핵심 원칙 (절대 준수) 🚨
+> 이 7가지 원칙은 모든 스크립트 작성, 데이터 분석, 모델 학습, 시뮬레이션, 승률 계산, DB 기록에 **자동으로** 그리고 **예외 없이** 적용되어야 합니다. (DB 쿼리: `SELECT * FROM StrategyRule WHERE type IN ('핵심원칙','데이터무결성','전략구조')`)
 
-1. **Look-ahead Bias(미래 참조 편향) 절대 방지 (Shift+1 원칙)**
-   - 상위 타임프레임(H1 일봉 형태의 매크로 데이터, 4시간(H4) 데이터, M5 데이터 등) 데이터를 기준 타임프레임(M1 봉)에 맞춰 병합할 때, **반드시 직전 완성봉(Shift+1)의 데이터만 사용**해야 합니다. 현재 진행 중인 봉의 데이터를 맵핑하면 미래 정보를 참조하는 심각한 오류가 발생합니다.
-2. **거래 마찰 비용 (Friction Cost) 무조건 반영**
-   - 시뮬레이션, 백테스트뿐만 아니라 **데이터 분석 시, 윈-레이트(승률) 계산 시, 가설 검증 시** 등 모든 수익/실패 판단 시 XAUUSD 거래의 **Friction Cost = 30 포인트($0.30)**를 반드시 손익에서 차감하고 계산해야 합니다.
-3. **절대값 사용 엄격 금지 (파생 피처 사용)**
-   - 데이터를 분석하거나 피처를 만들 때 원본 절대값(가격, 금리 4.25%, EURUSD 1.08 등)을 그대로 투입하는 오류를 절대 방지해야 합니다. 반드시 상대적 스케일을 갖는 파생 피처(변화율 Δ%, 롤링 Z-Score, 이평선과의 이격도, 기울기(Slope), 가속도(Accel) 등)로 변환하여 사용해야 합니다.
+1. **Rule_Shift+1** (미래 참조 편향 방지) ★★★
+   - 상위 TF(H1/매크로)를 M1에 병합 시 **직전 완성봉(Shift+1)만 사용**. Z-score: `x.shift(1).rolling(W)`, 매크로 병합 전 `shift(1)` 적용. (미래 정보 참조 완전 차단)
+2. **Rule_No_Absolute_Values** (절대값 투입 원천 금지 + 파생 유형 체계) ★★★
+   - **기본 5유형 (강제)**: 가속도, 멀티스케일 Z-Score(60/240, 1440 선택), 비율, Slope, **롤링 퍼센타일 랭크(pct240/pct1440)** ★
+   - **레벨값 전용 (강제)**: 변화율(Δ%) — 매크로·가격·금리 레벨 데이터에 적용. 스케일 오실레이터(0~100)에는 Slope로 대체 허용
+   - **조건부**: 정규화 이격도(가격 기반 지표 전용), 롤링 상관계수(SHAP 상위 피처 쌍 한정, 2라운드)
+   - **스케일 오실레이터 예외**: BOP_Scale, QQE_RSI, TDI_Signal, CHOP_Scale, ADXS_Scale 등은 Passthrough 허용
+   - **Tick Volume**: 절대값 금지. MA 비율(60/240/1440) 3개 + Z-Score(60/240) 2개 + **pct240** 병행 생성
+   - **BOPWMA/BSPWMA**: Slope + Accel + Slope_Zscore만 허용 (원본 DROP)
+3. **Rule_Friction_Cost_30pt** (마찰 비용 강제 적용) ★★
+   - 모든 수익/실패 판단 시 XAUUSD **마찰비용 30포인트($0.30)**를 매 거래마다 강제 차감.
+4. **TrailingStop_Exit_Only** (청산 역할 분리)
+   - 라벨링/모델은 **진입만 판단**. 백테스트/시뮬레이션 청산은 고정 TP 없이 **TrailingStopVx 전담**.
+5. **Warm-up dropna 필수** (기술적 무결성)
+   - 2계층 저장 시 dropna 금지. M1 최종 병합(`merge_features.py`) 시 반드시 `dropna()` 호출하여 불완전 데이터 완벽 제거.
+6. **ffill 정책 및 bfill 완전 금지** (시계열 매핑)
+   - 매크로 피처 NaN은 `ffill`로만 처리. `bfill`은 미래참조이므로 **절대 사용 금지**.
+7. **Winsorization** (이상치 클리핑)
+   - 극단 이상치(Z-score ±10 이상)는 삭제 대신 **상하위 1~5% 클리핑**으로 극단 이벤트 정보 보존. 딥러닝 필수, 트리 모델 선택.
+
+### 🧠 피처 엔지니어링 실전 14원칙 (A+B+C 검증 반영, 2026-03-09)
+> DB 쿼리: `SELECT * FROM StrategyRule WHERE type IN ('피처엔지니어링','모델구조','모니터링')`
+
+1. **공선성 검증**: 상관계수 **0.85** 이상 피처 쌍 제거. **실측: 811→419개 (Spearman 0.85)**
+2. **피처 선택 (2단계)**: 1라운드 SHAP Top-60 → 2라운드 +동적pct(+16) +레짐(+4) = **80개 최종**
+3. **파생 피처 유형**: 기본 5유형(가속도+Z-Score+비율+Slope+**pct**) + 레벨값 Δ% + Passthrough + 조건부
+4. **Tick Volume**: MA 비율 3개 + Z-Score 2개 + **pct240** 1개 투입. SHAP 선별
+5. **세션 인코딩**: 트리 모델 One-hot, 딥러닝 sin/cos 순환 인코딩
+6. **LightGBM 단조 제약 (방안 B)** ★: `monotone_constraints` +1=19/-1=8. **단독 FAIL** — pct 조합 필수
+7. **레짐 인식 피처 (방안 C)**: 4개 피처, 신호 수 +25% 효과. 학습 스크립트 내 Close로 계산
+8. **롱/숏 분리 학습**: Stage A→B→C(비대칭 임계치 **롱>0.25** 숏>0.70)→D(매크로 게이트키퍼)
+9. **PSI 안정성 모니터링**: PSI>0.25 → 재학습 트리거. Fold간 SHAP 급변 시 과적합 경고
+10. **다중 검정 보정**: BH-FDR 필수. SHAP Top-60도 5-Fold 중 3회 이상 등장만 채택
+11. **이상치 처리**: Winsorization 상하 1~5%. **X_train 기준 percentile만 적용** (미래 누수 방지)
+12. **캘린더/이벤트 피처**: 요일·월·시간 sin/cos, 월말 플래그, FOMC/NFP 48시간 원핫
+13. **피처 중요도 시간적 일관성**: 분기별 SHAP 비교. 레짐 의존 피처는 방안 C와 함께 조건부 투입
+14. **Z-score 한계 인식** ★: 레짐 전환 시 스케일 불일치 → **pct240 병행 필수** (실측: 33%→52%)
 
 ### 부가 원칙
-- **🎯 확정된 전략 구조 (2026-02-27)**: Setup(딱 1개) → AI 학습 → TrailingStop 청산
+- **🎯 확정된 전략 구조 (2026-03-09 갱신)**: AI A+B+C 통합 모델 → TrailingStop 청산
   ```
-  Setup:   LRAVGST_Avg(180)_BSPScale > 1.0  (황금 구간 — 이 조건에서만 진입 후보)
-  AI:      눌림목 / 타이밍 / 진입 여부 전부 480개 피처로 AI가 학습하여 결정
+  AI:      진입 여부 — 80개 피처(SHAP Top-60+pct16+regime4) + 단조제약 + FP페널티
+           AUC=0.8298, OOS 3/3 PASS, M30>35+thr=0.25 승률 **56.3%**
   청산:    TrailingStopVx 전담 (고정 TP 사용 안 함)
   ```
-- **ATR 동적 배리어 라벨링 선행 필수**: `LRAVGST_Avg(180)_BSPScale > 1.0` 황금 구간에서만 라벨 생성. 배리어: TP=ATR×1.0 / SL=ATR×1.2 / 45봉. **실전 청산은 TrailingStopVx 전담** (AI는 진입만 학습).
-- **메가 피처 풀 투입**: 구할 수 있는 모든 피처를 처음부터 전부 투입. AI가 핵심 피처를 알아서 추출.
-- **BOPWMA/BSPWMA 지표**: 누적 합 로직 → **금지**: 절대 레벨 비교(>0), Δ%, 원본값 Z-Score. **허용**: 기울기, 가속도, 기울기의 Z-Score, Δ(절대 차분), 롤링 백분위, 가격 대비 다이버전스.
-- **Walk-Forward 3단계 검증**: Step 1(2개월) → Step 2(1년) → Step 3(최대 가용 데이터). 모두 통과해야 실전 투입.
+- **🛡️ 확정된 실전 하드 필터 (2026-03-08 갱신)**: `ADXMTF_M30_DiPlus > 35`
+  - 하향추세/추세전환 초반 롱 진입 차단 (AI 모델 앞단에 적용)
+  - 근거: 필터 없음 8.0% → 적용 후 승률 **13.3%** (+5.3%p, TP=2.0ATR 기준)
+  - 3-Barrier 라벨링은 이 필터 없이 전봉 생성 (AI가 피처로 학습)
+- **ATR 동적 배리어 라벨링**: 배리어: TP=ATR×**2.0** / SL=ATR×2.5 / 30봉 / TP판정=Close. **실전 청산은 TrailingStopVx 전담**.
+- **메가 피처 풀 투입**: ~817개 피처 전부 투입 → Spearman 0.85 Pruning(419개) → SHAP Top-60 자동 선별.
+- **Walk-Forward 3단계 검증**: Step 1(6개월) → Step 2(1.5년) → Step 3(최대). 모두 승률 ≥45% 통과 필수.
 - **Safety**: `GetLastError()` 필수, StopLoss/TrailingStop 항상 포함.
 
+### 🗄️ VectorDB 임베딩 10대 원칙
+> DB 쿼리: `SELECT * FROM StrategyRule WHERE type = '임베딩전략'`
+> **구축 로드맵**: Phase 1(기초 인프라 + 유사 패턴 검색) → Phase 2(메타 라벨링 강화) → Phase 3(에이전트 메모리 통합)
+
+1. **차원 축소 (2단계)**: 전체 피처 통째 벡터화 금지 (차원의 저주). 1라운드: PCA/Autoencoder (누적분산 90%↑), 2라운드: SHAP 상위 핵심 피처 재임베딩
+2. **OOM 방지 청킹**: 대용량 시계열 벡터화 시 연/분기 단위 chunk 처리. **청크 경계 윈도우 크기 오버랩 필수**
+3. **Z-Score/랭크 스케일링**: 임베딩 전 피처 스케일링 완료 필수 (절대값 크기 차이에 의한 유사도 왜곡 차단)
+4. **결측치 Imputation**: 벡터 공간에 NaN 투입 불가. Z-score → 0, 기타 → Median으로 전처리
+5. **멀티스케일 윈도우 4계층**: M1 30봉 + M1 240봉 + H1 24봉 + H1 120봉. 검색 시 스케일별 유사도 가중 합산
+6. **메타데이터 동시 저장**: `time`, `session`, `volatility_percentile`, `label_result` → 하이브리드 검색
+7. **미래 참조 방지 🚨**: ChromaDB 쿼리 시 `where={"time": {"$lt": current_query_time}}` 메타데이터 조건 강제 적용
+8. **Winsorization 적용 시점**: 2계층 Parquet 클리핑 금지. 임베딩/학습 파이프라인에서 `X_train` 기준 percentile만 적용
+9. **CE 래칫 리셋 필수**: 래칫 장기 누적 시 Z-score NaN/Inf 폭발. 추세 이탈 시 리셋된 피처만 투입
+10. **fat-tail 피처 허용**: CHV StdDev 등 std 5~15는 금 시장 정상. 2계층 보존, 학습 시 Winsorization
 
 ## 4. Environment & Tools
 **Build Command**:
@@ -140,6 +203,9 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 - **도구 (Execution)**: Neo4j HTTP API를 래핑한 커스텀 FastMCP 활용 (Bolt 드라이버의 네트워킹 버그 우회)
   - `uv run fastmcp dev Ontology/Tools/mcp_neo4j_http.py` (MQL5 폴더에서 실행하여 MCP 환경에 등록 및 Tools 활성화)
 - **자동 참조 (Read)**: 복잡한 아키텍처나 기능 간 의존성 추적이 필요할 때, 파일 검색 전에 먼저 Cypher 쿼리를 날려 Neo4j DB 관계도를 조회하고 맥락을 장착한다.
+
+### D. Python Interpreter MCP (데이터 분석 및 코드 실행)
+- **Rule**: Python 코드 실행(`mcp_python-interpreter_run_python_code`) 시 **반드시 `environment="default"` 옵션을 지정**해야 한다. 이를 통해 `pandas` 등의 필수 라이브러리가 설치된 메인 파이썬 환경(`C:\Python314\python.exe`)에서 분석이 올바르게 수행될 수 있도록 한다.
 
 ## 6. Autonomous Policy (사용자 검토 우선 정책)
 

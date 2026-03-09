@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "8347206a408b9df1",
+        "id": "fd936ea80d9c50ef",
         "type": "tabs",
         "children": [
           {
-            "id": "5ec60eb7ff81dcb1",
+            "id": "3110d80f1a5070da",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Docs/TrendTrading Development Strategy/long_labeling_70pct_report.md",
+                "file": "Docs/TrendTrading Development Strategy/롱 학습결과 분석.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "long_labeling_70pct_report"
+              "title": "롱 학습결과 분석"
             }
           }
         ]
@@ -183,22 +183,29 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "bfd0d48385dd2216",
+  "active": "3110d80f1a5070da",
   "lastOpenFiles": [
-    "Files/processed/labels_barrier.parquet",
-    "Files/processed/macro_features.parquet",
-    "Ontology/Tools/upsert_fe_rules.py",
-    "Ontology/Tools/upsert_rules.py",
-    "Ontology/Tools/__pycache__/cypher_cli.cpython-314.pyc.2822087994672",
-    "Ontology/Tools/tmp_query.cypher",
-    "Files/processed/tech_features_derived.parquet",
-    "Files/Tools/schema_out.txt",
-    "Docs/TrendTrading Development Strategy/Memo.md",
-    "Files/Tools/sim_duka_verify.py",
-    "Files/raw/ATR_DownLoad.csv",
-    "Files/raw/dukascopy/XAUUSD.csv",
-    "Docs/TrendTrading Development Strategy/long_labeling_70pct_report.md",
+    "Indicators/BSP105V8/BSPWMA3.log",
+    "Include/Math/Alglib/solvers.log",
+    "Indicators/Examples/ColorBars.log",
+    "Indicators/BSP105V6/BSPWMA.log",
+    "Indicators/BSP105V6/LRAVGSTD.log",
+    "Docs/TrendTrading Development Strategy/롱 학습결과 분석.md",
+    "Docs/TrendTrading Development Strategy/롱진입조건_탐색_분석보고서.md",
     "Docs/TrendTrading Development Strategy/XAUUSD_AI_전략개발_종합_로드맵.md",
+    "Docs/TrendTrading Development Strategy/Labeling.md",
+    "Files/Tools/sim_ai_ce_exit.py",
+    "Files/processed/ABC_signals_v2_thr020.csv",
+    "Scripts/UnitTests/Stat/TestStatPrecision.log",
+    "Scripts/ShowAISignalResult.log",
+    "Scripts/test.log",
+    "Scripts/Examples/Canvas/CanvasSample.log",
+    "Docs/TrendTrading Development Strategy/Memo.md",
+    "Docs/TrendTrading Development Strategy/기술지표_입력값_DB_조회본.md",
+    "Docs/TrendTrading Development Strategy/데이터_파이프라인_컬럼_명세서.md",
+    "Docs/Mean Reversal Developmet Strategy/종목선정.md",
+    "Docs/TrendTrading Development Strategy/종목선정.md",
+    "Docs/TrendTrading Development Strategy/long_labeling_70pct_report.md",
     "Docs/TrendTrading Development Strategy/feature_gap_analysis.md",
     "Docs/DataBase/Parquet_Visualizer_매뉴얼.md",
     "Docs/TrendTrading Development Strategy/ DB Framework.md",
@@ -214,8 +221,6 @@
     "Docs/Prompt/Order.md",
     "Docs/Analysis_Report.md",
     "Indicators/python_converter_list.md",
-    "Data/1st-Strategy-HighUpstream-Strategy/Position Data Sample.md",
-    "Data/1st-Strategy-HighUpstream-Strategy/LongTermBacktestResult.md",
-    "Data/1st-Strategy-HighUpstream-Strategy/Optimization_26_2_13.md"
+    "Data/1st-Strategy-HighUpstream-Strategy/Position Data Sample.md"
   ]
 }

@@ -13,13 +13,12 @@
 > 2. **Friction Cost 30포인트**: 데이터 분석, 승률 계산, 가설 검증 시 수익에서 무조건 30포인트 차감
 > 3. **절대값 사용 금지**: 원본 가격/금리 대신 파생 피처(Δ%, Z-score 등)만 생성/전송
 >
-> ### 🎯 확정된 전략 구조 (2026-02-27)
+> ### 🎯 확정된 전략 구조 (2026-03-07 갱신)
 > ```
-> Setup(1개):  LRAVGST_Avg(180)_BSPScale > 1.0  ← 라벨링 황금 구간 필터
-> AI 학습:     눌림목 여부 / 타이밍 / 진입 결정 → 480개 피처로 AI가 학습
+> AI 학습:     진입 결정 → 480개 피처(BSPScale 포함)로 AI가 학습
 > 청산:        TrailingStopVx 전담 (고정 TP 사용 안 함)
 > ```
-> **라벨링 시 반드시 준수**: `LRAVGST_Avg(180)_BSPScale > 1.0` 조건 충족 봉에서만 라벨 생성.
+> **라벨링**: 전체 봉에 대해 ATR Barrier 라벨 생성. BSPScale은 고정 필터가 아닌 AI 학습 피처로 활용.
 
 > **🤖 제미나이(AI) 필수 작업 규칙:**
 > 제미나이 역시 데이터 가공 및 전처리는 무조건 이 에이전트(`1_Data_Prep.md`)를 통해서만 진행해야 하며, 분석 및 시뮬레이션 과정에서 필요한 경우 `Agents/` 폴더 내의 에이전트 마크다운 파일들을 직접 수정(업데이트)하면서 진행해야 합니다.
@@ -227,7 +226,7 @@ model = RandomForestClassifier().fit(X, y)
 |:---|:---|:---|
 | `Files/Tools/build_data_lake.py` | Python | 기술지표/Yahoo/FRED CSV → 3개 Parquet 일괄 빌더 (전처리 포함) |
 | `Files/Tools/build_tech_derived.py` | Python | 기술 지표 파생 변환 (Z-score Shift+1, MTF 변화점, CE ratio) |
-| `Files/Tools/build_labels_barrier.py` | Python | Triple Barrier 라벨링 (ATR×1.0/1.2, 45봉, Friction 30pt) |
+| `Files/Tools/build_labels_barrier.py` | Python | Triple Barrier 라벨링 (ATR×2.5/2.5, 30봉, Friction 30pt, TP=Close기준) |
 | `Files/Tools/merge_features.py` | Python | Tech+Macro(Shift+1)+Labels 병합 → AI_Study_Dataset.parquet |
 | `Files/Tools/verify_merged_dataset.py` | Python | 병합 무결성 검증 (Shift+1, MTF, Label 정합성) |
 | `Files/Tools/peek_schema.py` | Python | Parquet 스키마/데이터 초고속 확인 |

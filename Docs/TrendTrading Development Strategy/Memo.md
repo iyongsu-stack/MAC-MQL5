@@ -1,6 +1,6 @@
 # 데이터 수집 현황 및 Data Lake 아키텍처 메모
 
-> 최종 업데이트: 2026-02-24
+> 최종 업데이트: 2026-03-09
 
 ---
 
@@ -11,10 +11,10 @@
 | 파일 | 내용 | 행수 | 컬럼수 | 크기 | 업데이트 주기 |
 |:---|:---|:---:|:---:|:---:|:---|
 | [tech_features.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/tech_features.parquet) | M1 기술 지표 (ADX, QQE, BWMFI 등) | 3,150,208 | 63 | 1.0 GB | 매일 |
-| [tech_features_derived.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/tech_features_derived.parquet) | 기술 지표 파생 변환 (Z-score Shift+1 적용) | 3,150,208 | ~94 | 1.2 GB | 파생 스크립트 실행 시 |
-| [macro_features.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/macro_features.parquet) | 매크로 파생 피처 (변화율/멀티스케일 Z-score) | 8,651 | 360 | 14 MB | 매주 |
-| [labels_barrier.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/labels_barrier.parquet) | Triple Barrier 정답지 (Long/Short 분리) | ~240,000 | 9 | - | 라벨링 로직 수정 시 |
-| [AI_Study_Dataset.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/AI_Study_Dataset.parquet) | **최종 AI 학습 데이터셋** | 3,150,208 | ~460 | 1.1 GB | 병합 워크플로우 실행 시 |
+| [tech_features_derived.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/tech_features_derived.parquet) | 기술 지표 파생 변환 (Z-score+pct240 Shift+1) | 7,424,421 | 165 | ~4.5 GB | 파생 스크립트 실행 시 |
+| [macro_features.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/macro_features.parquet) | 매크로 파생 피처 (변화율/멀티스케일 Z-score) | 8,651 | 652 | 14 MB | 매주 |
+| [labels_barrier.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/labels_barrier.parquet) | Triple Barrier 정답지 (Long/Short 분리) | ~7,424,357 | 6 | - | 라벨링 로직 수정 시 |
+| [AI_Study_Dataset.parquet](file:///c:/Users/gim-yongsu/AppData/Roaming/MetaQuotes/Terminal/5B326B03063D8D9C446E3637EFA32247/MQL5/Files/processed/AI_Study_Dataset.parquet) | **최종 AI 학습 데이터셋** | 2,659,938 | 817 | 1.35 GB | 병합 워크플로우 실행 시 |
 
 ---
 
@@ -119,12 +119,15 @@
 
 ---
 
-## 다음 단계
+## 다음 단계 — 2026-03-09 갱신
 
-1. **전처리 파이프라인**: `tech_features.parquet`를 기반으로 `tech_features_derived.parquet` 파생, 이후 `macro_features.parquet`를 Shift+1으로 M1 타임스탬프 기준 병합.
-2. **ATR 동적 배리어 라벨링(학습용)**: M1 데이터 + ATR(14) 기반 동적 TP/SL(1.0/1.2, 45봉)로 진입 타이밍 정답지 생성 (`labels_barrier.parquet`). 최종 `AI_Study_Dataset.parquet`로 모두 병합 완료. 실전 청산은 트레일링스탑 전담.
-3. **LightGBM + SHAP**: 메가 피처 풀(360개 매크로 + 63개 기술) → 핵심 3~5개 피처 추출
-4. **Walk-Forward 3단계 검증**: Step1(2개월 마이닝) → Step2(1년 OOS) → Step3(10년)
+1. ✅ **전처리 파이프라인**: `tech_features.parquet` → `tech_features_derived.parquet` 파생 완료 (pct240/pct1440 45개 피처 포함)
+2. ✅ **ATR 동적 배리어 라벨링**: ATR(14)×2.5 TP/SL, 30봉, Friction $0.30, Long전용 → `labels_barrier.parquet` 완료
+3. ✅ **피처 병합**: Macro Shift+1 + merge_asof + dropna → `AI_Study_Dataset.parquet` (817컬럼, 266만행) 완료
+4. ✅ **무결성 검증**: 5/5 PASS
+5. ✅ **AI 학습 1라운드**: Feature Pruning(811→419) + LightGBM 5-Fold(AUC=0.7967) + SHAP Top-60 (pct 피처 11개 선발)
+6. ✅ **AI 학습 2라운드**: A+B+C 통합 모델 — AUC=0.8298, OOS 3/3 PASS, M30>35+thr=0.25 승률 **56.3%** (549건)
+7. 👉 **ONNX 내보내기**: `model_long.onnx` → MQL5 EA 탑재 ← **현재 단계**
 
 ---
 
@@ -254,33 +257,62 @@
 > **결론**: `build_data_lake.py`의 `calc_macro_features()` 함수가 원본 CSV에서 정확하게 파생 피처를 계산하여 Parquet에 저장하고 있음을 확인. float32 다운캐스팅에 의한 미세 오차(< 0.000001)만 존재하며 품질에 영향 없음.
 
 
-## 5. [AI 모델 파이프라인] 피처 엔지니어링 실전 원칙
-1. 공선성 검증: 상관계수 **0.85** 이상인 피처 쌍은 하나로 합치거나 제거. Tie-Breaker: Target(Y)과의 MI가 낮은 쪽 제거
-2. 피처 선택: 메가 풀 → SHAP 자동 추출(주력) + Ablation Study(새 지표 검증용 보조)
-3. 파생 피처 유형 (원본 절대값 금지):
-   - **기본 4유형 (강제)**: 가속도(Slope의 Diff), 멀티스케일 Z-Score(60/240, 1440은 선택), 비율(MA 대비 등), Slope(기울기)
-   - **레벨값 전용 (강제)**: 변화율(Δ%) — 가격·금리·환율 등 레벨 데이터에만 적용. 이미 스케일화된 오실레이터(RSI, ADX, BOP_Scale 등 0~100 범위)에는 Slope로 대체 허용
-   - **조건부 (SHAP 기반)**: 정규화 이격도 — 가격 기반 지표(CE 등)에 적용. 롤링 상관계수 — 1라운드 SHAP 상위 피처 쌍에 대해 2라운드에서 선별 추가 (무차별 투입 시 피처 폭발·SHAP 왜곡 위험)
-   - **스케일 오실레이터 예외**: BOP_Scale, QQE_RSI, TDI_Signal, CHOP_Scale, ADXS_Scale 등 이미 정규화된 지표는 원본 Passthrough 허용 (가격 레벨값이 아님)
-4. Tick Volume: 절대값 금지. MA 대비 비율(60/240/1440) 3개 + Z-Score(60/240) 2개를 모두 생성하여 투입. 비율은 세션별 계절성, Z-Score는 극단 거래량 탐지. SHAP이 유효 피처를 선별 (메가 풀 전략)
-5. 세션 인코딩: 트리 모델은 One-hot, 딥러닝은 sin/cos 순환 인코딩
-6. 롱/숏 분리 학습 + 단일 EA 통합:
-   - Stage A: 롱 모델(label_long)과 숏 모델(label_short)을 처음부터 분리 학습 → 방향별 SHAP으로 피처 중요도 희석 방지
-   - Stage B: Walk-Forward 3단계 검증 (각 모델 독립). 숏 모델 데이터 부족 시 scale_pos_weight 보정
-   - Stage C: `model_long.onnx` + `model_short.onnx`를 하나의 MQL5 EA에 로드, 비대칭 임계치(롱 > 0.55 & 숏 > 0.70) + 상충 시 관망
-   - Stage D (선택): 매크로 피처가 SHAP 상위권일 경우 게이트키퍼 레이어 추가
-7. 피처 안정성 모니터링: PSI(Population Stability Index)로 분포 변화 추적, PSI > 0.25이면 불안정 → 재학습 트리거. Walk-Forward 단계 간 피처 중요도 순위 급변 시 과적합 경고
-8. 다중 검정 보정: 수백 개 피처 동시 테스트 시 BH-FDR(Benjamini-Hochberg) 보정 적용 필수. SHAP 상위 피처도 5-Fold 중 3회 이상 상위권 등장하는 것만 채택 (순위 안정성)
-9. 이상치 처리: 금 시장 꼬리 리스크 극단적(Z-Score ±10 이상 가능) → Winsorization 상하 1~5% 클리핑. 제거가 아닌 클리핑으로 극단 이벤트 정보 보존 (딥러닝은 필수, 트리 모델은 선택)
-10. 캘린더/이벤트 피처: 요일·월·시간을 sin/cos 순환 인코딩. 월말 리밸런싱 플래그(is_month_end_5days), FOMC/NFP 전후 48시간 원핫 플래그 투입
-11. 피처 중요도 시간적 일관성: 전체 기간 SHAP 1회가 아닌 분기별 SHAP 비교. 특정 분기에만 중요한 피처는 레짐 의존적 → 항상 투입 vs 레짐 조건부 투입 결정
+## 5. [AI 모델 파이프라인] 피처 엔지니어링 실전 원칙 — 2026-03-09 갱신
+
+> **갱신 근거**: A+B+C 모델 실험 (AUC=0.8298, OOS 3/3 PASS, M30>35+thr=0.25 승률 **56.3%**)
+> Z-score만으로는 레짐 불일치(IS: 완만 상승, OOS: 폭등) 해결 불가 → 롤링 퍼센타일 랭크 + 단조 제약 + 레짐 피처 조합이 핵심
+
+1. **공선성 검증**: 상관계수 **0.85** 이상인 피처 쌍은 하나로 합치거나 제거. Tie-Breaker: Target(Y)과의 MI가 낮은 쪽 제거. **실측: 811→419개 (Spearman 0.85 기준)**
+2. **피처 선택 (2단계)**: 
+   - **1라운드**: 메가 풀(~811개) → Spearman Pruning → LightGBM 5-Fold → SHAP Top-60 자동 선별
+   - **2라운드**: Top-60 + 동적 퍼센타일(+16) + 레짐 피처(+4) = **80개 최종 피처** → A+B+C 통합 학습
+3. **파생 피처 유형 (원본 절대값 금지)**:
+   - **기본 5유형 (강제)**: 가속도, 멀티스케일 Z-Score(60/240, 1440 선택), 비율(MA 대비), Slope(기울기), **롤링 퍼센타일 랭크(pct240/pct1440)** ★
+   - **롤링 퍼센타일 랭크 (검증 완료, 필수)**: `x.shift(1).rolling(W).rank(pct=True)` — Z-score의 레짐 불일치를 해결하는 핵심 보완 유형. `ADXMTF_H4_DiPlus_pct240`이 SHAP 전체 2위(0.233) 기록. **IS 전체 기준 rank 금지, 반드시 rolling(240) 사용** (실측: rolling이 IS기준 대비 OOS 승률 +7%p)
+   - **레벨값 전용 (강제)**: 변화율(Δ%) — 가격·금리·환율 레벨 데이터에만 적용. 스케일 오실레이터(0~100)에는 Slope로 대체 허용
+   - **조건부 (SHAP 기반)**: 정규화 이격도(가격 기반 지표 전용), 롤링 상관계수(SHAP 상위 쌍 한정)
+   - **스케일 오실레이터 예외**: BOP_Scale, QQE_RSI, TDI_Signal, CHOP_Scale, ADXS_Scale 등 Passthrough 허용
+4. **Tick Volume**: 절대값 금지. MA 비율(60/240/1440) 3개 + Z-Score(60/240) 2개 + **pct240 1개** 투입. SHAP이 유효 피처 선별
+5. **세션 인코딩**: 트리 모델은 One-hot, 딥러닝은 sin/cos 순환 인코딩
+6. **LightGBM 단조 제약 (방안 B, 검증 완료)** ★:
+   - 도메인 지식 기반 `monotone_constraints` 적용: **+1=19개 / -1=8개 / 0(자유)=53개**
+   - 예: DiPlus↑→Win(+1), DiMinus↑→Loss(-1), QQE_RSI→비선형(0)
+   - **단독 사용 시 OOS FAIL (0/3)** — 반드시 퍼센타일 랭크와 조합 필수
+   - `monotone_constraints_method = "advanced"` 사용
+7. **레짐 인식 피처 (방안 C, 검증 완료)**:
+   - 4개 피처: `regime_monthly_pct`, `regime_weekly_up_ratio`, `regime_above_ma20w`, `regime_bull_flag`
+   - **2라운드 학습 스크립트 내에서 Close로부터 실시간 계산** (별도 파이프라인 불필요)
+   - 중요도 하위 30%이나 **신호 수 +25% (437→549건)** 효과 — 진입 강도 미세 조절 역할
+   - **모두 단조 +1 제약** (강세장일수록 Win 확률 높음)
+   - `above_ma20w`, `bull_flag`는 binary 특성상 기여 미미 → 향후 연속값 대체 검토
+8. **롱/숏 분리 학습 + 단일 EA 통합**:
+   - Stage A: 분리 학습 → 방향별 SHAP 독립
+   - Stage B: Walk-Forward 3단계 검증 (각 모델 독립)
+   - Stage C: `model_long.onnx` + `model_short.onnx` → 단일 EA, 비대칭 임계치(롱 > 0.25 & 숏 > 0.70) ← **롱 임계치 0.55→0.25로 실측 기반 하향**
+   - Stage D (선택): 매크로 게이트키퍼
+9. **피처 안정성 모니터링**: PSI > 0.25 → 재학습 트리거. Walk-Forward Fold간 SHAP 급변 시 과적합 경고
+10. **다중 검정 보정**: BH-FDR 필수. SHAP Top-60도 5-Fold 중 3회 이상 등장 피처만 채택
+11. **이상치 처리**: Winsorization 상하 1~5% 클리핑. **X_train 기준 percentile만 적용** (미래 누수 방지)
+12. **캘린더/이벤트 피처**: 요일·월·시간 sin/cos, 월말 플래그, FOMC/NFP 48시간 원핫
+13. **피처 중요도 시간적 일관성**: 분기별 SHAP 비교. 레짐 의존 피처는 레짐 피처(방안 C)와 함께 조건부 투입
+14. **Z-score 한계 인식 (실험적 확인)** ★: Z-score는 rolling(W) 기간의 평균/표준편차에 고정되어 **레짐 전환 시 스케일 불일치** 발생. IS(완만 상승)→OOS(폭등)에서 동일 Z값이 전혀 다른 시장 강도를 의미 → **pct240 병행 필수**. 실측: pct240 적용 후 OOS 승률 33%→52%
 
 ### 🗄️ 벡터 DB 임베딩 전략
-1. 스케일링된 피처를 슬라이딩 윈도우(기본 M1 30봉) 단위로 벡터화하여 ChromaDB에 저장
-2. 기초 인프라 구축 → 메타 라벨링 강화 → 에이전트 메모리 통합 (단계적 활용)
-3. 임베딩 전에 반드시 Z-Score/랭크 스케일링 완료 필수 (원본값 벡터화 시 유사도 왜곡)
-4. 멀티스케일 윈도우 4계층: M1 30봉(30분, 즉시 진입 시그널) + M1 240봉(4시간, 세션 방향 확인) + H1 24봉(1일, 일간 추세) + H1 120봉(1주, 레짐/매크로 컨텍스트) 4계층 임베딩 병렬 저장, 검색 시 스케일별 유사도 가중 합산
-5. 메타데이터 동시 저장: session(아시아/유럽/미국), volatility_percentile(ATR 백분위), label_result(TP/SL/Timeout) → 메타데이터 필터링 후 유사도 검색. 레짐 판별 방식은 추후 복합 지표(ADX+ChopIndex+ATR Z-Score) 기반으로 별도 설계
+
+**구축 로드맵**: Phase 1(기초 인프라 + 유사 패턴 검색) → Phase 2(메타 라벨링 강화) → Phase 3(에이전트 메모리 통합)
+
+1. **차원 축소 (2단계 접근)**:  108개 전 피처를 윈도우(30봉) 벡터화하면 차원의 저주 발생 (108×30=3240차원)
+   - **1라운드 (SHAP 이전)**: PCA 또는 Autoencoder로 차원 축소 (누적 분산 90% 이상 기준). 모델 학습 전 유사 패턴 탐색·메타 라벨링에 활용
+   - **2라운드 (SHAP 이후)**: SHAP 상위 핵심 피처 세트로 재임베딩하여 정제된 VectorDB 구축
+2. **청크 단위 메모리 최적화 (OOM 방지 필수)**: 742만 개 대용량 시계열 벡터화 시 OOM 발생. 연/분기 또는 봉 개수(예: 50만개) 단위 chunking 적용. **⚠️ 청크 경계에서 윈도우 크기만큼 오버랩(overlap) 필수** (예: 30봉 윈도우 시 29봉 오버랩하여 경계 벡터 불완전 방지)
+3. **Z-Score/랭크 스케일링 (왜곡 방지)**: 임베딩 전에 반드시 피처 스케일링 완료 필수 (원본값 크기 차이에 의한 벡터 유사도 왜곡 차단)
+4. **결측치 사전 Imputation**: 벡터 공간에는 NaN 투입 불가. 부득이한 NaN(웜업 등)은 중앙값(Median) 또는 0(Z-score인 경우)으로 완벽히 전처리 후 임베딩 통과
+5. **멀티스케일 윈도우 4계층**: M1 30봉(30분, 즉시 진입) + M1 240봉(4시간, 세션 방향) + H1 24봉(1일, 일간 추세) + H1 120봉(1주, 레짐/매크로) 4계층 병렬 저장. 검색 시 스케일별 유사도 가중 합산
+6. **메타데이터 동시 저장**: `time`(생성 시점), `session`(장세), `volatility_percentile`, `label_result` → 시맨틱+구조적 하이브리드 검색. 레짐 판별은 추후 복합 지표(ADX+ChopIndex+ATR Z-Score) 기반 별도 설계
+7. **미래 참조 방지 (Time-Series Leakage 차단) 🚨**: 유사도 검색 시 쿼리 시점보다 미래 봉 반환은 심각한 편향 누수. ChromaDB 쿼리 시 반드시 `where={"time": {"$lt": current_query_time}}` 메타데이터 조건 강제 적용
+8. **⚠️ Winsorization 적용 시점**: 2계층 Parquet에는 클리핑 **절대 적용 금지**. 임베딩/학습 파이프라인에서만 `X_train` 기준 percentile로 적용 (아래 원칙 #7 참조)
+9. **CE 트레일링 SL 래칫 리셋**: 래칫 장기 누적 시 Z-score NaN/Inf 폭발. 추세 이탈(`close < SL`) 시 리셋 로직(`CE_TrailingStop.py`) 적용된 피처만 임베딩 투입
+10. **fat-tail 피처 허용**: `CHV StdDev` 등 금 시장 특유 두꺼운 꼬리(std 5~15)는 정상. 2계층 보존 후 학습/임베딩 시 Winsorization으로 통제
 
 📊 데이터베이스 작성 핵심 10원칙 (Strategy Rules + Feature Engineering 통합)
 1. **Rule_Shift+1** (미래 참조 편향 방지 원칙) ★★★
@@ -303,21 +335,29 @@
 국가별 휴장일 차이 등으로 발생한 매크로 피처 빈 공간(NaN)은 직전 거래일 값을 유지하는 ffill(Forward Fill) 로만 처리해야 함. 미래 데이터를 끌어다 채우는 bfill은 미래참조이므로 절대 사용 금지.
 7. **Winsorization** (이상치 클리핑 원칙)
 극단적 이상치(Z-score ±10 이상 가능) 발생 시 삭제 대신 **상하위 1%~5% 클리핑(Winsorization)** 으로 극단 이벤트 정보 보존. 딥러닝 모델은 필수 적용, 트리 모델(LightGBM)은 선택 적용.
+   - **⚠️ 적용 시점 (절대 원칙)**: 2계층 Parquet 저장 시 클리핑 **금지**. 반드시 **모델 학습 파이프라인 내에서 `X_train` 기준 percentile**로 적용. 전체 데이터 기준 percentile 사용 시 Walk-Forward 미래 정보 누수 발생.
+   - 적용 코드: `clip_lo = X_train.quantile(0.01)` → `X_train.clip(clip_lo, clip_hi)` → 동일 기준으로 `X_valid`도 클리핑
 
 ---
 
 
 
-[학습 구간 (IS)]
-  2012~2015 (하락장 숏) + 2019~2020 (상승장 롱)
-[검증 구간 (OOS)]
-  2004~2011 (약 8년)  ← 최초 유효 시점부터의 대상승/서브프라임 레짐
-  2016~2018 (약 3년)  ← 횡보 레짐
-  2022~2024 (약 3년)  ← 금리급등/신고가 레짐
-[최종 백테스트]
-  2004~2024 (약 20년 전체 구간)
+### 학습/검증/백테스트 구간 (AI_Study_Dataset 기준: 2018-08 ~ 2026)
 
-  2017년 이후 데이터만 제대로 다운로드 됨....
+> **데이터 제약**: BTC_zscore_1440 등 매크로 rolling(1440) 웜업으로 인해
+> 2018-08 이전 데이터는 NaN으로 dropna 제거됨. 클린 데이터 265만 행.
+
+```
+[학습 구간 (IS)]
+  2018-08~2022-12 (약 4.5년) ← COVID 전후 + 금리인상 초기
+[검증 구간 (OOS)]
+  2023-01~2024-06 (약 1.5년) ← 금리 고점 / 신고가 레짐
+[최종 백테스트]
+  2024-07~2026 (약 1.5~2년) ← 완전 미보유 최신 데이터
+```
+
+> **Walk-Forward 3단계 검증**은 위 구간 내에서 Expanding Window로 수행.
+> 2005~2017 데이터는 매크로 결측으로 사용 불가 (대안③ 채택, NaN 과적합 방지).
 
 
 [QQE 눌림목 정밀 타점 라벨링 (3-Barrier) 요약](qqe_labeling_optimization_report.md)
@@ -325,98 +365,116 @@
 
 
 
-##후보 A(LightGBM + Purged K-Fold)  <---- 학습방법
-1. SHAP 분산 왜곡 방지 (다중공선성 사전 제거 - Feature Pruning)
-문제점: 우리가 생성한 460개의 피처 중 상당수는 수리적으로 매우 유사합니다. (예: ADX_Slope와 ADX_Accel, 혹은 특정 Z-score의 60주기와 240주기 등). 트리 모델(LightGBM)은 이런 중복 피처가 있어도 예측은 잘 해냅니다. 하지만 SHAP 중요도를 뽑을 때 심각한 왜곡이 발생합니다. 진짜 핵심 피처 1개의 기여도가 3개의 유사 피처로 분산(100% → 33%, 33%, 34%)되면서, 하위권으로 밀려나 버릴 수 있습니다.
-대안 (필수): SHAP 분석을 돌리기 직전에, 피처 간의 스피어만 상관계수(Spearman Correlation)나 계층적 군집화(Hierarchical Clustering)를 통해 상관계수가 0.95 이상인 중복 피처군을 찾아내고, 그중 하나만 남기는 사전 프루닝(Pruning) 작업을 스크립트에 반드시 포함시켜야 합니다.
-2. 비대칭 손실 함수 적용 (Custom Asymmetric Loss)
-문제점: 일반적인 머신러닝의 목적 함수(Logloss)는 예측이 틀렸을 때의 페널티를 동일하게 매깁니다. 하지만 트레이딩에서는 그렇지 않습니다.
-진입 기회를 놓친 경우 (False Negative): 계좌 타격 없음 (기회비용뿐)
-섣불리 진입해서 손절친 경우 (False Positive): 실제 자본 손실 (-SL - 30pt Friction)
-대안: LightGBM을 학습시킬 때 기본 손실 함수 대신, 섣부른 진입(거짓 양성)에 더 무거운 페널티를 부여하는 **비대칭 포컬 로스(Asymmetric Focal Loss)**나 사용자 정의 손실 함수를 깎아서(Custom Objective) 넣어야 합니다. 그래야 AI가 확실한 자리가 아니면 방아쇠를 당기지 않는 '진짜 스나이퍼'로 성장합니다.
-3. 롤링 윈도우 기반 연속 학습 (Walk-Forward Continual Learning)
-문제점: 2012년부터 2026년까지의 데이터를 한 번의 K-Fold(5등분)로 섞어버리면, 제로금리 시대(20122020)의 패턴이 고금리/인플레 시대(20222026)의 예측을 방해할 수 있습니다. 시장 레짐(Regime)은 변합니다.
-대안: 전체 데이터를 한 번에 학습하는 것이 아니라, 최근 3년으로 학습 → 다음 6개월 예측(검증) 창을 14년간 계속 밀고 나가는 진정한 의미의 연속적 Walk-Forward 교차 검증 파이프라인을 짜야 합니다. (이는 메모에 적어주신 '상승장/하락장 승률이 다르다'는 통찰과도 정확히 맞닿아 있습니다.)
+## 후보 A (LightGBM + Purged K-Fold) ← 학습방법 — 2026-03-07 갱신
+
+### 1. SHAP 분산 왜곡 방지 (다중공선성 사전 제거 - Feature Pruning) ✅ 필수
+**문제점**: 772개 피처 중 상당수가 수리적으로 유사 (예: ADX_Slope↔ADX_Accel, Z-score 60↔240). 트리 모델 예측엔 영향 없으나, SHAP 중요도에서 핵심 피처 기여도가 유사 피처군으로 분산(100% → 33%×3)되어 하위권으로 밀리는 왜곡 발생.
+**대안 (필수)**: SHAP 분석 직전, 스피어만 상관계수 또는 **계층적 군집화(Ward linkage)**로 상관계수 **0.85 이상** 중복 피처군을 찾아 대표 1개만 잔존. (0.95는 완전 복사본만 잡아내므로 불충분, GEMINI.md 원칙과 일치하는 0.85 적용)
+
+### 2. 비대칭 손실 함수 (Custom Asymmetric Loss) ⏳ 2라운드에서 적용
+**문제점**: 표준 Logloss는 FP(섣부른 진입→손절)와 FN(기회 놓침)에 동일 페널티. 트레이딩에서는 FP가 실자본 손실이므로 비대칭.
+**판단**: 1라운드 목표는 "핵심 피처 발굴"이므로 표준 Logloss 사용. 비대칭 손실을 1라운드에 넣으면 모델이 보수적으로 학습 → "안전한 피처"가 상위로 올라가 SHAP 왜곡.
+**적용 순서**:
+```
+1라운드: 표준 Logloss + SHAP → 핵심 피처 60개 선별
+2라운드: 핵심 60개 + 비대칭 포컬 로스 → 최종 스나이퍼 모델
+```
+
+### 3. Walk-Forward 연속 학습 (Expanding Window) ✅ 필수 — 윈도우 조정됨
+**문제점**: 전체 데이터를 K-Fold로 섞으면 레짐(Regime) 변화 무시. 데이터 7.5년이므로 원래 3년 학습 윈도우 조정 필요.
+**대안**: Expanding Window 방식 (시작점 고정, 끝점 확장) — 7.5년 데이터를 버리지 않고 점진 확장:
+
+| 항목 | 설정 |
+|:---|:---|
+| 학습 | 2~2.5년 시작 → Expanding |
+| 검증 | 6개월 고정 |
+| 총 검증 | ~8~10회 |
+
+> Rolling(고정 폭 슬라이딩)보다 Expanding이 적합: 7.5년이라 학습 데이터를 버리기 아까움.
 
 
 
 
-## 📅 데이터 최대 활용 전략 (2003~2025, 22년) — 2026-03-03
+## 📅 데이터 최대 활용 전략 (2018-08~2026, 약 7.5년) — 2026-03-07 갱신
 
-### XAUUSD 상승장/하락장 구간 맵
+> **데이터 제약사항**: BTC/FEDFUNDS/UMCSENT 매크로 rolling 웜업으로 2018-08 이전 NaN.
+> 대안③ 채택 (NaN 과적합 방지를 위해 클린 데이터만 사용).
 
-| 상승장 (롱 라벨링) | 기간 | 특징 |
+### XAUUSD 시장 레짐 맵 (2018~2026)
+
+| 구간 | 기간 | 레짐 특징 |
 |:---|:---|:---|
-| 🟡 2005-2008 | 4년 | 금 슈퍼 사이클 시작 |
-| 🟡 2009-2011 | 3년 | QE 시대 금 폭등 ($1,900) |
-| 🟡 2016-2018 | 3년 | 완만한 회복 상승 |
-| 🟡 **2019-2020** | 2년 | COVID 전후 급등 |
-| 🟡 2023-2025 | 3년 | 중앙은행 매수 + 지정학 |
+| 🟡 2018-08~2019-06 | ~1년 | 횡보/완만 상승 (미중 무역전쟁) |
+| 🟡 2019-07~2020-08 | ~1년 | COVID 전후 급등 ($1,500→$2,075) |
+| 🔴 2020-08~2022-09 | ~2년 | 조정/횡보 ($2,075→$1,615, 금리인상) |
+| 🟡 2022-10~2024-10 | ~2년 | 중앙은행 매수 + 지정학 신고가 ($2,800) |
+| 🟡 2024-11~2026 | ~1.5년 | 최신 데이터 (검증용) |
 
 ### 확장된 파이프라인 설계
 
 ```
-[롱 모델 — 최대 데이터 활용]
+[롱 모델 — 클린 데이터 활용]
 
-┌─ 학습 데이터 (라벨링 구간) ─────────────────────────
-│  2005-2008 + 2009-2011 + 2016-2018 + 2019-2020
-│  = ~12년 상승장 (예상 샘플: 1,000~2,000건)
+┌─ 학습 데이터 (IS) ──────────────────────────────
+│  2018-08~2022-12 (약 4.5년)
+│  ← 횡보 + COVID 급등 + 금리인상 조정 레짐 포함
 │
-├─ Purged Walk-Forward 튜닝 ──────────────────────────
-│  시간순으로 Expanding Window:
-│  Fold1: 2005-2008 학습 → 2009 검증
-│  Fold2: 2005-2009 학습 → 2010-2011 검증
-│  Fold3: 2005-2011 학습 → 2016-2017 검증
-│  Fold4: 2005-2017 학습 → 2018-2019 검증
-│  Fold5: 2005-2019 학습 → 2020 검증
-│  → 서로 다른 시장 체제를 5번 교차 검증 (강건!)
+├─ Purged Walk-Forward 튜닝 ──────────────────────
+│  시간순 Expanding Window:
+│  Fold1: 2018-08~2019-12 학습 → 2020-01~06 검증
+│  Fold2: 2018-08~2020-06 학습 → 2020-07~12 검증
+│  Fold3: 2018-08~2020-12 학습 → 2021-01~06 검증
+│  Fold4: 2018-08~2021-06 학습 → 2021-07~2022-06 검증
+│  Fold5: 2018-08~2022-06 학습 → 2022-07~12 검증
+│  → COVID 전후 + 금리전환기 등 서로 다른 레짐 5회 교차 검증
 │
-└─ Walk-Forward 최종 검증 (완전 미보유 데이터) ──────
+└─ Walk-Forward 최종 검증 (완전 OOS) ──────────────
    Step1: 2023-01~2023-06 (6개월) → 최소 생존
    Step2: 2023-01~2024-06 (1.5년) → 안정성
-   Step3: 2023-01~2025-12 (3년) → 실전 신뢰
+   Step3: 2024-07~2026    (1.5~2년) → 최신 실전 신뢰
 ```
 
 ```
-[숏 모델 — 최대 데이터 활용]
+[숏 모델 — 클린 데이터 활용]
 
-┌─ 학습 데이터 (라벨링 구간) ─────────────────────────
-│  2012-2015 + 2008 금융위기 + 2020 COVID 급락 + 2022 금리인상
-│  = ~7년 하락장/조정기
+┌─ 학습 데이터 (IS) ──────────────────────────────
+│  2020-08~2022-09 (약 2년, 주 하락/조정 구간)
+│  + 2018-08~2019-06 (약 1년, 횡보 숏 기회)
 │
-├─ Purged Walk-Forward 튜닝 ──────────────────────────
-│  Fold1: 2008 학습 → 2012-2013 검증
-│  Fold2: 2008+2012-2013 학습 → 2014-2015 검증
-│  Fold3: 전체 학습 → 2020 검증
-│  Fold4: 전체 학습 → 2022 검증
+├─ Purged Walk-Forward 튜닝 ──────────────────────
+│  Fold1: 2018-08~2020-12 학습 → 2021-01~06 검증
+│  Fold2: 2018-08~2021-06 학습 → 2021-07~2022-06 검증
+│  Fold3: 2018-08~2022-06 학습 → 2022-07~12 검증
 │
-└─ Walk-Forward 최종 검증 ────────────────────────────
-   2024-2025 하락 구간에서 검증
+└─ Walk-Forward 최종 검증 ────────────────────────
+   2024-2025 하락/조정 구간에서 검증
 ```
 
-### AI 학습 전체 흐름
+### AI 학습 전체 흐름 — 2026-03-07 갱신
 
 ```
-Step 1. 라벨링
-   └─ 3-Barrier로 label_long 생성 (넓게: BSP>1.5 + QQE GC + TV>1.2×)
+Step 0-2. 데이터 빌드 (/data-build 워크플로우)
+   └─ build_micro_tech.py → build_tech_derived.py → build_labels_barrier.py
+   └─ merge_features.py → verify_merged_dataset.py
+   └─ 결과: AI_Study_Dataset.parquet (772컬럼, 265만행, 2018-08~2026)
 
-Step 2-3. 피처 병합
-   └─ 마이크로(~200) + 매크로(~360) → 총 ~560개 피처 부착
-
-Step 4. AI 학습 (2라운드)
-   ┌─ [1라운드] 560개 전체 투입 → LightGBM 학습
-   │   └─ SHAP 분석 → "이 60개가 핵심이다" 자동 선별
-   │   └─ 나머지 500개는 노이즈 → 제거
+Step 3. AI 학습 — 완료 ✅ (2026-03-08)
+   ┌─ [1라운드] train_round1.py
+   │   └─ Feature Pruning: 811→419개 (Spearman 0.85)
+   │   └─ 5-Fold AUC=0.7967±0.0211
+   │   └─ SHAP Top-60 (pct240 피처 11개 선발)
    │
-   └─ [2라운드] 핵심 60개만으로 재학습
-       └─ Purged Walk-Forward로 모델 튜닝 (5 Fold, 서로 다른 시대)
-       └─ OOS AUC > 0.7 확인
+   └─ [2라운드] train_round2_ABC.py (A+B+C 통합)
+       └─ 방안A: pct 동적 랭크 | 방안B: 단조 제약 | 방안C: 레짐 4피처
+       └─ 총 80피처, AUC=0.8298
+       └─ OOS 3/3 PASS (49.5%/47.8%/45.0%)
+       └─ M30>35+thr=0.25: **56.3% 승률 (549건)**
 
-Step 5. Walk-Forward 3단계 최종 검증
-   └─ 학습에 전혀 사용 안 한 미래 데이터로 실전 테스트
-   └─ 2023~2025 (3년) 완전 OOS
-   └─ 모두 통과 → 모델 완성 ✅
-   └─ 실패 → Step 1(라벨링)부터 재조정
+Step 4. Walk-Forward 검증 — 완료 ✅
+   └─ Step1: 2023-01~06 → 49.5% PASS
+   └─ Step2: 2023-01~2024-06 → 47.8% PASS
+   └─ Step3: 2024-07~2026 → 45.0% PASS
+   └─ 모델 파일: models/round2_ABC/model_long_ABC.txt
 ```
 
 ### 기대 수익 (승률 70%, TP=3ATR, SL=CE_Upl2, 0.01랏)
@@ -431,7 +489,7 @@ Step 5. Walk-Forward 3단계 최종 검증
 | Sharpe (추정) | ~1.5 | **~2.0+** |
 
 ### 주의사항
-- 2003~2004는 XAUUSD 유동성이 낮아 마이크로 피처 품질 저하 가능 → 2005부터 시작 추천
-- 매크로 데이터 가용성 확인 필요 — FRED/Yahoo 일부 지표가 2010년 이후부터만 존재할 수 있음
+- 데이터 범위: 2018-08 ~ 2026 (약 7.5년, 265만 M1봉). BTC/FEDFUNDS/UMCSENT의 rolling(1440/240) 웜업으로 이전 데이터 사용 불가 (대안③ 적용)
+- 매크로 rolling(1440) 이상 파생 컬럼 중 100% NaN 4개 자동 제거됨 (FEDFUNDS/UMCSENT `_1440`)
 - 롱/숏 모델은 **완전 분리 학습** (라벨, 모델, SHAP 모두 독립)
 
