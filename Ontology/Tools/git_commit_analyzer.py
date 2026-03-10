@@ -253,3 +253,23 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# ======================================
+# 6. Session Memory 연동 (추가)
+# ======================================
+
+def sync_to_session_memory(changed_files: list):
+    """변경 파일을 FileState 노드로 업서트"""
+    try:
+        from session_memory import upsert_file_state
+        for f in changed_files:
+            action_map = {"M": "modified", "A": "created", "D": "deleted", "R": "renamed"}
+            action = action_map.get(f.get("status", "M"), "modified")
+            upsert_file_state(
+                path=f["path"],
+                action=action,
+                description=f"git commit 자동 기록 [{f['status']}]"
+            )
+    except Exception as e:
+        print(f"  ⚠️  session_memory 연동 실패: {e}")
+

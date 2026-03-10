@@ -240,3 +240,26 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 | 1 | `Docs/TrendTrading Development Strategy/ DB Framework.md` | 4계층 데이터 파이프라인 + ETL 품질 검증 + VectorDB 구조 |
 | 2 | `Docs/TrendTrading Development Strategy/XAUUSD_AI_전략개발_종합_로드맵.md` | AI 주도 Top-Down 패턴 마이닝, Walk-Forward 3단계, 오프라인/온라인 아키텍처 |
 | 3 | `Docs/TrendTrading Development Strategy/XAUUSD_AI_피처_완전_가이드.md` | 메가 피처 풀, 6가지 파생 유형, SHAP 피처 선택, 피처 중요도 기반 랏사이즈 |
+## 8. 세션 메모리 자동 저장 규칙 (Session Memory Auto-Save)
+
+> AI는 아래 조건을 감지하면 **자동으로** `session_memory.py`를 호출하여 Neo4j에 저장한다.
+
+### 자동 저장 트리거 조건
+
+| 트리거 | 저장 함수 | 저장 내용 |
+|---|---|---|
+| 파일 생성/수정/삭제 완료 시 | `upsert_file_state(path, action, description)` | 파일명·경로·작업 요약 |
+| "확정", "결정", "채택", "결론" 키워드 등장 + 내용 확정 시 | `save_decision(what, why)` | 무엇을·왜 결정했는지 |
+| 대화 마무리 발화("수고했어", "다음에 봐", "끝") 감지 시 | `save_session(summary, topics, files_touched)` | 3줄 이내 대화 요약 |
+| 새 대화창 시작 + `/resume` 입력 시 | `build_resume_context(4)` 실행 및 출력 | 최근 4세션 + 7일 파일 복원 |
+
+### 실행 방법
+```bash
+python3.13 Ontology/Tools/session_memory.py --resume   # 문맥 복원
+python3.13 Ontology/Tools/session_memory.py --test     # 동작 테스트
+```
+
+### DB 연결
+- **Neo4j HTTP API**: `http://127.0.0.1:7474/db/neo4j/tx/commit`
+- **인증**: `neo4j / KIM10507`
+- **스크립트**: `Ontology/Tools/session_memory.py`
