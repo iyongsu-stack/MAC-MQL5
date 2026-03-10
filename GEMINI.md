@@ -263,3 +263,21 @@ python3.13 Ontology/Tools/session_memory.py --test     # 동작 테스트
 - **Neo4j HTTP API**: `http://127.0.0.1:7474/db/neo4j/tx/commit`
 - **인증**: `neo4j / KIM10507`
 - **스크립트**: `Ontology/Tools/session_memory.py`
+
+## 9. 새 대화 자동 컨텍스트 로드 (CRITICAL — 자동 실행)
+
+> 새 대화창에서 **첫 번째 사용자 메시지를 받으면**, 다른 모든 작업보다 **먼저** 아래를 자동 실행한다.
+> 사용자가 `/resume`을 입력하지 않아도 항상 적용된다.
+
+### 자동 실행 순서
+1. `python3.13 Ontology/Tools/session_memory.py --resume` 실행
+2. 출력 결과(최근 세션 요약 + 수정 파일 목록)를 내부 컨텍스트로 장착
+3. 사용자에게는 **1줄 요약만** 표시 후 본 요청에 응답:
+   ```
+   🧠 [세션 복원] 마지막 작업: <날짜> — <한줄 요약> | 최근 수정: <파일 N개>
+   ```
+4. 그 다음 사용자의 실제 요청을 처리
+
+### 예외 (실행 생략)
+- Neo4j 서버가 응답하지 않을 경우 (connection refused) → 조용히 생략하고 진행
+- 세션 데이터가 0개인 경우 → 생략
