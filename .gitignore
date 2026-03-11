@@ -41,3 +41,4 @@ __pycache__/
 # --- 데이터 파일 (대용량) ---
 *.csv
 *.parquet
+mcp.json
