@@ -137,16 +137,19 @@
                     └──────────────────────┘
 ```
 
-### Model_AddOn에 추가되는 피처 (α)
+### Model_AddOn에 추가되는 피처 (α) — 확정 (2026-03-11)
 
 | 피처 | 설명 |
 |:---|:---|
-| `unrealized_pnl_atr` | 현재 미실현 수익 / ATR (정규화) |
-| `bars_since_entry` | 진입 후 경과 봉 수 |
-| `bsp_scale_delta` | 진입 시점 대비 BSP Scale 변화 |
-| `price_vs_entry` | (현재가 - 진입가) / ATR |
-| `trend_acceleration` | BSP 기울기의 변화율 (추세 가속 중인가) |
+| `unrealized_pnl_atr` | (현재가 - 1차진입가) / ATR (정규화 미실현 수익) |
+| `bars_since_entry` | 1차 진입 후 경과 봉 수 |
+| `bsp_scale_delta` | 진입 시점 대비 BSPScale(`LRAVGST_Avg(60)_BSPScale`) 변화 (추세 안정성) |
+| `atr_expansion` | 현재ATR / 1차진입ATR — 변동성 확장 비율 |
+| `trend_acceleration` | BSPScale 5봉 기울기 (추세 가속 중인가) |
 | `addon_count` | 이미 추가한 횟수 (0, 1, 2) |
+
+> **W-1**: `price_vs_entry`(중복) → `atr_expansion`(변동성 확장)으로 교체
+> **W-2**: `bsp_scale_delta`가 `BOP_Scale` 참조 → `BSPScale`로 변경
 
 ### 라벨링 방법 (label_addon)
 
@@ -187,7 +190,39 @@ AI 확률 > 0.8  →  3차 추가 허용
 
 > 💡 **1단계를 먼저 완성**하고, 실전 성능이 확인된 후 2→3단계로 확장하는 것이 과적합 방지에도 안전합니다.
 
-### 🛠 데이터 파이프라인 업데이트 요구사항 (AI 학습 확장 시)
-Model_AddOn(멀티 라벨) 방식 도입을 확정할 경우, 현재 구축된 **4계층 Data Lake 파이프라인의 수정이 필수**입니다.
-- **`build_labels_barrier.py` 스크립트 수정**: 기존 라벨(Model_Entry) 이외에 추가 진입용 라벨(label_addon)을 생성하는 로직 추가 개발 필요.
-- **신규 로직**: "1차 진입이 수익 중일 때, 현재 시점에서 추가 진입했을 경우 이후 가격 궤적이 TP 배리어를 먼저 치는가 SL 배리어를 먼저 치는가?"를 평가하여 `1` 또는 `0` 라벨링.
+---
+
+### ⚠️ 피라미딩 데이터셋 빌드 시 교훈 (2026-03-11)
+
+| # | 함정 | 원인 | 해결 |
+|:---:|:---|:---|:---|
+| W-1 | α 피처 `price_vs_entry`가 `unrealized_pnl_atr`과 중복 | 동일 수식 → SHAP 분산 낭비 | `atr_expansion` (현재ATR/진입ATR) 교체 |
+| W-2 | `bsp_scale_delta`가 `BOP_Scale` 참조 (변수명과 불일치) | 매수 압력 ≠ 추세 안정성 혼동 | `LRAVGST_Avg(60)_BSPScale` 참조로 통일 |
+| W-3 | Left Join 시 266만 행 대부분 label=NaN | Model_AddOn은 조건부 학습 | **Inner Join** 채택 |
+
+> [!NOTE]
+> 라벨 Parquet에서 원본 OHLC/CE_CE2가 병합 시 유입되는 절대값 누수도 발생함.
+> → `merge_features_pyramid.py`에서 라벨 DF 컬럼 필터(Time + label + α 6개만 선택)로 해결.
+
+### 🛠 데이터 파이프라인 — 확정 (2026-03-11)
+
+> **W-3**: 병합 시 **Inner Join** 채택. Model_AddOn 학습에는 라벨 없는 일반 봉 불필요.
+
+```
+  Step P1: build_pyramid_labels_full.py     ← 신규
+         │  (V2 로직 + α 피처 6개, IS+OOS 전구간)
+         ▼
+  labels_pyramiding_full.parquet
+         │
+  Step P2: merge_features_pyramid.py        ← 신규
+         │  (Tech+Macro+Label Inner Join)
+         ▼
+  AI_Pyramid_Dataset.parquet
+         │
+  Step P3: verify_pyramid_dataset.py        ← 신규
+         │  (무결성 5/5 PASS)
+         ▼
+  ✅ 피라미딩 데이터 빌드 완료
+```
+
+> 전체 워크플로우: `/data-build` (Part B 섹션 참조)

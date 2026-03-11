@@ -1,11 +1,12 @@
 ---
-description: AI 학습용 데이터셋 자동 빌드 — 기술 피처 파생 → 라벨링 → 매크로 병합 → 검증
+description: AI 학습용 데이터셋 자동 빌드 — 기술 피처 파생 → 라벨링 → 매크로 병합 → 검증 + 피라미딩 전용 데이터 빌드
 ---
 // turbo-all
 
 # AI 학습 데이터셋 빌드 워크플로우 (/data-build)
 
 > **목적**: Dukascopy M1 CSV → 기술 지표 원본 → 파생 피처 → 라벨링 → 매크로 병합 → 최종 AI 학습 데이터셋 자동 생성
+> 추가로, 피라미딩(Model_AddOn) 전용 데이터셋 빌드 파이프라인도 포함합니다.
 
 > [!IMPORTANT]
 > **🚨 AI 전략 개발 핵심 원칙 (자동 적용됨)**
@@ -226,7 +227,137 @@ Yahoo/FRED → macro_features.parquet ─┤
 
 ---
 
+# [Part B] 피라미딩 전용 데이터 빌드 (Model_AddOn)
+
+> **목적**: 이미 1차 롱 진입이 성공(Win)한 상태에서, 추가 진입(피라미딩) 여부를 AI가 판단하는 Model_AddOn 전용 학습 데이터셋 생성.
+
+> [!CAUTION]
+> **핵심 규칙: 기존 스크립트/파일 덮어쓰기 금지**
+> 기존 롱전략용 스크립트와 데이터를 절대 수정하지 않습니다.
+> 숏전략 개발 시에도 동일한 기존 코드를 재사용하므로, **항상 새 이름의 파일만 생성**합니다.
+> (Neo4j DB 규칙: `스크립트_덮어쓰기_금지`)
+
+> [!IMPORTANT]
+> **전제 조건**: Part A의 Step 0~2가 완료되어 다음 파일들이 존재해야 합니다:
+> - `tech_features.parquet` (62컬럼) — Step 0 산출물
+> - `tech_features_derived.parquet` (165컬럼) — Step 1 산출물
+> - `macro_features.parquet` (652컬럼) — `/data-fetch` 산출물
+> - `labels_barrier.parquet` — Step 2 산출물 (Win 위치 참조용)
+
+---
+
+## Step P1: 피라미딩 전체 구간 라벨링 (build_pyramid_labels_full.py)
+
+> **입력**: `tech_features.parquet` + `labels_barrier.parquet`
+> **출력**: `labels_pyramiding_full.parquet`
+> **핵심 로직**:
+> - `sim_label_pyramiding_v2.py`의 V2 로직 기반 (기존 스크립트 미수정)
+> - 전체 구간(IS+OOS, 2018-08 ~ 데이터 끝) 라벨링
+> - 3-Barrier: SL = ATR×2.5, TP = ATR×2.0, CE2 청산, Friction $0.30
+> - 눌림목 State Machine (PULLBACK_ATR_DIP=1.0) 으로 눌림목 구간 제외
+> - **α 피처 6개** 동시 계산:
+>   1. `unrealized_pnl_atr` — (현재가 - 1차진입가) / ATR
+>   2. `bars_since_entry` — 1차 진입 후 경과 봉 수
+>   3. `bsp_scale_delta` — 진입 시점 대비 BSPScale 변화
+>   4. `atr_expansion` — 현재ATR / 1차진입ATR (변동성 확장 비율)
+>   5. `trend_acceleration` — BSPScale 5봉 기울기
+>   6. `addon_count` — 이미 추가한 횟수 (초기 0)
+
+```powershell
+C:\Python314\python.exe "c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files\Tools\build_pyramid_labels_full.py"
+```
+
+**예상 소요**: ~15분
+**검증 포인트**: α 피처 6개 NaN=0, label_pyramid 분포(0/1), 연도별 분포 출력
+
+---
+
+## Step P2: 피라미딩 전용 피처 병합 (merge_features_pyramid.py)
+
+> **입력**: `tech_features_derived.parquet` + `macro_features.parquet` + `labels_pyramiding_full.parquet`
+> **출력**: `AI_Pyramid_Dataset.parquet`
+> **핵심 로직**:
+> - Macro 데이터 **Shift+1 선적용** (기존 merge_features.py와 동일)
+> - `merge_asof(direction="backward")` 시간 기준 과거 매핑
+> - **Inner Join**: 라벨이 존재하는 봉만 남김 (Model_AddOn 조건부 학습 목적)
+> - 100% NaN 매크로 컬럼 사전 제거
+> - **Warm-up dropna**: `dropna(subset=macro_cols)`
+
+```powershell
+C:\Python314\python.exe "c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files\Tools\merge_features_pyramid.py"
+```
+
+**예상 소요**: ~60초
+**검증 포인트**: 전체 행 수 = labels_pyramiding_full 행 수와 일치, α 피처 6개 + 기존 피처 병합 완료
+
+---
+
+## Step P3: 피라미딩 데이터셋 무결성 검증 (verify_pyramid_dataset.py)
+
+> **입력**: `AI_Pyramid_Dataset.parquet` + 원본 파일들
+> **검증 항목**:
+> 1. Macro Shift+1 정합성
+> 2. M5/H4 변화점 일관성
+> 3. `label_pyramid` 컬럼 존재 및 값 분포 (0/1)
+> 4. α 피처 6개 존재 및 NaN 비율
+> 5. 절대값(OHLC, TickVolume) 누수 검증
+
+```powershell
+C:\Python314\python.exe "c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files\Tools\verify_pyramid_dataset.py"
+```
+
+**검증 포인트**: 모든 항목 `✅ PASS` 확인
+
+---
+
+## ⚠️ 피라미딩 데이터 빌드 시 주의사항 (2026-03-11 실행 검증 완료)
+
+> 아래 3가지는 실제 파이프라인 실행 시 발견된 설계 함정입니다.
+> **Part A(진입 학습)에는 해당 없음** — α 피처는 "포지션 보유 중" 전제 위에 설계.
+
+| # | 함정 | 원인 | 해결 (코드 반영 완료) |
+|:---:|:---|:---|:---|
+| W-1 | `price_vs_entry`가 `unrealized_pnl_atr`과 중복 | 동일 수식 → SHAP 분산 낭비 | `atr_expansion`(현재ATR/진입ATR) 교체 |
+| W-2 | `bsp_scale_delta`가 `BOP_Scale` 참조 | 변수명과 실제 참조 불일치 | `LRAVGST_Avg(60)_BSPScale` 참조로 통일 |
+| W-3 | Left Join 시 대부분 행 label=NaN | 조건부 학습에 불필요한 데이터 | **Inner Join** 채택 |
+
+**추가 버그(실행 시 발견, 수정 완료)**:
+- `tech_features_derived.parquet`: `time`(소문자) → `Time` rename 필요
+- `macro_features.parquet`: `Date`가 index로 저장 → `reset_index()` + tz 제거 필요
+- 라벨 Parquet에서 원본 OHLC/CE_CE2 컬럼이 병합 시 유입 → 라벨 DF 컬럼 필터(Time + label + α 6개만 선택) 추가
+
+---
+
+## 피라미딩 파이프라인 요약
+
+```
+[Part A 산출물 — 재사용]
+  tech_features.parquet (62컬럼)
+  tech_features_derived.parquet (165컬럼)
+  macro_features.parquet (652컬럼)
+  labels_barrier.parquet (Win 위치 참조)
+          │
+  Step P1: build_pyramid_labels_full.py          (~15분)
+          │  (V2 로직 + α 피처 6개, IS+OOS 전구간)
+          ▼
+  labels_pyramiding_full.parquet
+          │
+  Step P2: merge_features_pyramid.py             (~60초)
+          │  (Tech+Macro+PyramidLabel Inner Join)
+          ▼
+  AI_Pyramid_Dataset.parquet
+          │
+  Step P3: verify_pyramid_dataset.py
+          │  (무결성 5/5 PASS)
+          ▼
+  ✅ 피라미딩 데이터 빌드 완료
+```
+
+---
+
 ## 스크립트 목록
+
+### Part A: 롱전략 (Model_Entry)
 
 | 스크립트 | 역할 | 위치 |
 |:---|:---|:---|
@@ -238,6 +369,14 @@ Yahoo/FRED → macro_features.parquet ─┤
 | `train_round1.py` | 1라운드 (Spearman Pruning + LightGBM + SHAP Top-60) | `Files/Tools/` |
 | `train_round2_ABC.py` | 2라운드 A+B+C 통합 (AUC=0.8298, 56.3%) | `Files/Tools/` |
 | `extract_ABC_signals.py` | 신호 CSV 추출 (M30>35+thr=0.25) | `Files/Tools/` |
+
+### Part B: 피라미딩 (Model_AddOn)
+
+| 스크립트 | 역할 | 위치 |
+|:---|:---|:---|
+| `build_pyramid_labels_full.py` | 피라미딩 전체 구간 라벨링 + α 피처 6개 | `Files/Tools/` |
+| `merge_features_pyramid.py` | 피라미딩 전용 Inner Join 병합 | `Files/Tools/` |
+| `verify_pyramid_dataset.py` | 피라미딩 데이터셋 무결성 검증 (5/5 PASS) | `Files/Tools/` |
 
 > 파라미터(ATR 배수 등)를 변경하려면 각 스크립트 상단의 설정 섹션을 수정 후 이 워크플로우를 재실행하세요.
 > 라벨링만 단독 재실행하려면 `/data-label` 워크플로우를 사용하세요.

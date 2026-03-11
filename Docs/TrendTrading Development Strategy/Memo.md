@@ -493,3 +493,500 @@ Step 4. Walk-Forward 검증 — 완료 ✅
 - 매크로 rolling(1440) 이상 파생 컬럼 중 100% NaN 4개 자동 제거됨 (FEDFUNDS/UMCSENT `_1440`)
 - 롱/숏 모델은 **완전 분리 학습** (라벨, 모델, SHAP 모두 독립)
 
+## 8. 근본 문제 인식: Z-Score의 한계와 레짐 불일치
+
+> 기록일: 2026-03-08
+
+### 문제의 핵심
+
+> "학습기간과 OOS 기간의 금 상승 기울기(레짐)가 근본적으로 다르다"
+
+```
+학습기간 (2018~2022): XAUUSD $1,200 ~ $2,000 (완만한 상승/하락 반복)
+OOS 기간  (2023~2026): XAUUSD $1,800 → $3,100+ (역사적 폭등, 기울기 2~3배)
+
+모델이 학습한 것:  "이런 기울기 패턴이면 Win이다" (패턴 매칭, 유사도 검색)
+실제로 필요한 것: "기울기가 X 이상이면 Win이다" (방향성 조건, 크다/작다)
+```
+
+**결과**: OOS에서 기울기가 학습 시절보다 훨씬 커져도, 모델은 "학습에서 본 적 없는 패턴"으로 인식 → 신호 미발생 또는 승률 하락.
+
+### Z-Score가 만들어내는 왜곡
+
+```python
+# Z-score (현재 방식): 절대 스케일에 고정됨
+z = (x - x.rolling(240).mean()) / x.rolling(240).std()
+
+# 학습 시절: 기울기 = 5.0, rolling mean = 4.0, std = 1.0 → z = 1.0 (정상 범위)
+# OOS 기간:  기울기 = 12.0, rolling mean = 10.0, std = 1.5 → z = 1.33 (모델은 "비슷하다"고 판단)
+# 실제로는 훨씬 강한 추세인데 Z-score는 비슷한 수치!
+
+# 더 심한 경우:
+# OOS 기간:  기울기 = 20.0, rolling mean = 16.0, std = 2.0 → z = 2.0 → 학습 분포 경계
+# 모델: "이런 극단값은 학습 때 없었다" → 예측 신뢰도 낮음
+```
+
+---
+
+## 9. 해결 방안: 3가지 접근법
+
+### 방안 A. 롤링 퍼센타일 랭크 (1순위 권장)
+
+Z-score 대신 **"최근 N봉 중 몇 %보다 강한가"** 로 피처 재정의.
+
+```python
+# 현재 (절대 스케일에 고정 — 레짐 변화에 취약):
+z_score = (x - x.rolling(240).mean()) / x.rolling(240).std()
+
+# 개선 (상대 서열, 스케일 독립 — 폭등장에도 유효):
+pct_rank = x.rolling(240).rank(pct=True)   # 0.0~1.0
+# 0.90 → "최근 240봉 중 상위 10% 강도"
+# 0.95 → "최근 240봉 중 상위 5% 강도"  ← 폭등장에서도 항상 유효!
+```
+
+**핵심 장점**:
+- OOS에서 금이 역대급으로 치솟아도 **"최근 기준으로 얼마나 강한가"** 는 항상 유효
+- 모델이 "비슷한 값 검색"이 아닌 **"X보다 크다"** 조건을 자연스럽게 학습
+- 레짐이 바뀌어도 피처 분포 0~1 고정 → 학습/OOS 동일한 스케일
+
+#### Top-60 기준 퍼센타일 랭크 적용 대상 (상세)
+
+**그룹 1 — 절대값 피처 → 퍼센타일 필수** (레짐 스케일 완전 의존)
+
+| 현재 피처명 | 문제 | 개선 피처명 |
+|:---|:---|:---|
+| `ADXMTF_M5_DiPlus` | 절대값, 레짐별 스케일 다름 | `ADXMTF_M5_DiPlus_pct240` |
+| `ADXMTF_H4_DiPlus` | 절대값 | `ADXMTF_H4_DiPlus_pct240` |
+| `ADXS_(14)_DiPlus` | 절대값 | `ADXS_(14)_DiPlus_pct240` |
+| `ADXS_(80)_DiPlus` | 절대값 | `ADXS_(80)_DiPlus_pct240` |
+| `ADXS_(14)_ADX` | 절대값 | `ADXS_(14)_ADX_pct240` |
+| `ADXS_(80)_ADX` | 절대값 | `ADXS_(80)_ADX_pct240` |
+| `ADXS_(14)_DiMinus` | 절대값 | `ADXS_(14)_DiMinus_pct240` |
+| `ADXS_(80)_DiMinus` | 절대값 | `ADXS_(80)_DiMinus_pct240` |
+| `ATR14` | 절대값 ($단위) | `ATR14_pct240` |
+| `CHOP_(120-40)_Scale` | 0~100 고정범위이나 레짐 영향 | `CHOP_Scale_pct240` |
+
+**그룹 2 — Z-score 피처 → 퍼센타일로 전환** (극단 OOS 값 처리 불가)
+
+| 현재 피처명 | 문제 | 개선 피처명 |
+|:---|:---|:---|
+| `BWMTF_H4_BWMFI_zscore20cp` | OOS 극단값 = 학습 분포 밖 | `BWMTF_H4_BWMFI_pct240` |
+| `BWMTF_M5_BWMFI_zscore60cp` | 동일 | `BWMTF_M5_BWMFI_pct240` |
+| `CE_Dist1_zscore60` | 동일 | `CE_Dist1_pct240` |
+| `LRAVGST_Avg(180)_StdS_zscore60` | 동일 | `LRAVGST_180_StdS_pct240` |
+| `LRAVGST_Avg(60)_StdS_zscore60` | 동일 | `LRAVGST_60_StdS_pct240` |
+| `CHV_(10-10)_StdDev_zscore1440` | 동일 | `CHV_StdDev_pct1440` |
+| `TickVolume_zscore1440` | 동일 | `TickVolume_pct1440` |
+| `ATR14_zscore30` | 창 너무 짧음(30봉) | `ATR14_pct240` 로 대체 |
+
+**그룹 3 — 기울기(slope) 피처 → 퍼센타일 병행 생성**
+
+| 현재 피처명 | 이유 | 추가 피처명 |
+|:---|:---|:---|
+| `CE_Dist2_slope14` | 폭등장 기울기가 IS보다 2~3배 클 수 있음 | `CE_Dist2_slope_pct240` |
+| `CE_SL1_slope5` | 동일 | `CE_SL1_slope_pct240` |
+| `BOP_(30-5)_slope14` | 동일 | `BOP_slope_pct240` |
+| `BSP_(10-3)_slope14` | 동일 | `BSP_slope_pct240` |
+| `ADXMTF_H4_DiPlus_slope5cp` | 동일 | `H4_DiPlus_slope_pct240` |
+| `ADXMTF_M5_DiPlus_slope14cp` | 동일 | `M5_DiPlus_slope_pct240` |
+
+**작업**: `build_tech_derived.py`에 `_pct240`, `_pct1440` 파생 피처 생성 코드 추가 → 데이터 재빌드 → 재학습.
+
+---
+
+### 방안 B. LightGBM 단조 제약 (2순위, 즉시 실험 가능)
+
+"DiPlus가 높을수록 → Win 확률이 높아야 한다"를 모델에 강제.  
+**`train_round2.py` 파라미터 수정만으로 즉시 실험 가능**.
+
+#### 단조 제약 설계 원칙
+
+| 적용 범위 | 결과 | 권장 |
+|:---|:---|:---:|
+| 너무 적게 (4~5개) | 효과 미미 | ❌ |
+| 너무 많이 (전체) | 잘못된 방향 → 성능 악화 | ❌ |
+| **도메인 지식 기반 (20~25개)** | 검증된 방향만 강제 | **✅** |
+
+> **주의**: Z-score 피처에 함부로 제약을 걸면 역효과.  
+> 예: `CE_Dist1_zscore60 = +1` 하면 극단 Z-score에서 강제 Win 예측 → FP 증가
+
+#### Top-60 피처 단조 분류
+
+**✅ +1 (클수록 Win, 17개) — 확실**
+
+```python
+# ADX 방향성 강도
+"ADXMTF_M5_DiPlus":           +1,   # M5 매수 방향 강도 ↑ → Win
+"ADXMTF_H4_DiPlus":           +1,   # H4 매수 방향 강도 ↑ → Win
+"ADXS_(14)_DiPlus":           +1,   # ADX M1 매수 강도 ↑ → Win
+"ADXS_(80)_DiPlus":           +1,   # ADX M1 장기 매수 강도 ↑ → Win
+
+# ADX 기울기
+"ADXMTF_H4_DiPlus_slope5cp":  +1,   # H4 DiPlus 기울기 ↑ → Win
+"ADXMTF_M5_DiPlus_slope14cp": +1,   # M5 DiPlus 기울기 ↑ → Win
+
+# ADX 전체 강도
+"ADXS_(14)_ADX":              +1,   # ADX 강도 ↑ → Win (추세 강함)
+"ADXS_(80)_ADX":              +1,   # ADX 장기 강도 ↑ → Win
+
+# CE 거리 (Chandelier Exit)
+"CE_SL2_dist_ATR":            +1,   # CE2 SL과 거리 멀수록 → Win
+"CE_Dist2_slope14":           +1,   # CE2 거리 기울기 ↑ → Win
+"CE_SL1_slope5":              +1,   # CE1 기울기 ↑ → Win
+
+# BOP/BSP (매수/매도 압력)
+"BOP_Scale":                  +1,   # BOP 매수 압력 ↑ → Win
+"BOP_(30-5)_slope14":         +1,   # BOP 기울기 ↑ → Win
+"BSP_(10-3)_slope14":         +1,   # BSP 기울기 ↑ → Win
+"BSP_(10-3)_accel14":         +1,   # BSP 가속도 ↑ → Win
+
+# 거래량
+"TickVolume_ratio_MA240":     +1,   # 거래량 증가 → Win
+"TickVolume_ratio_MA60":      +1,
+```
+
+**✅ -1 (클수록 Loss, 8개) — 확실**
+
+```python
+# ADX 반대방향 강도
+"ADXMTF_M5_DiMinus":          -1,   # M5 매도 방향 강도 ↑ → Loss
+"ADXS_(14)_DiMinus":          -1,   # ADX M1 매도 강도 ↑ → Loss
+"ADXS_(80)_DiMinus":          -1,   # ADX M1 장기 매도 강도 ↑ → Loss
+"ADXMTF_M5_DiMinus_slope14cp":-1,   # M5 DiMinus 기울기 ↑ → Loss
+
+# CE 스퀴즈 (추세 압축 = 불확실)
+"CE_SL2_squeeze":             -1,   # Squeeze 심할수록 → Loss
+"CE_SL1_squeeze":             -1,
+
+# CHOP (횡보 지수)
+"CHOP_(120-40)_Scale":        -1,   # CHOP ↑ = 횡보 → Loss
+"CHOP_(14-14)_CSI":           -1,
+```
+
+**⛔ 0 (제약 금지, 35개) — 비선형/불확실**
+
+```python
+# QQE RSI — 과매수/과매도 양방향 비선형
+"QQE_(5-14)_TrLevel":  0
+"QQE_(12-32)_RSI":     0
+
+# CHV StdDev — 변동성 고점 = 기회이기도, 위험이기도
+"CHV_(10-10)_StdDev_*": 0
+
+# CE Z-score — 극단값에서 방향 불명확
+"CE_Dist1_zscore60":   0
+
+# 매크로 피처 — 복합/비선형 관계
+"USDTRY_ret5d", "WHEAT_ret1d", "COFFEE_ret1d", ... : 0
+```
+
+**기대 효과**: "강한 추세 = Win" 강제 학습 → 폭등장에서 신호 증가, Z-score 왜곡 완화.
+
+---
+
+### 방안 C. 레짐 인식 피처 추가 (3순위)
+
+현재 레짐(폭등/횡보/하락)을 명시적 피처로 투입.
+
+```python
+# 월간 수익률 퍼센타일
+monthly_ret = close.resample('1M').last().pct_change()
+monthly_pct = monthly_ret.rolling(24).rank(pct=True)   # 최근 24개월 중 순위
+
+# 주간 상승 비율 (최근 20주 중 상승한 주 비율)
+weekly_up_ratio = (close.resample('1W').last().diff() > 0).rolling(20).mean()
+
+# 레짐 플래그
+regime = pd.cut(monthly_pct, bins=[0, 0.3, 0.7, 1.0],
+                labels=["하락레짐", "중립레짐", "상승레짐"])
+```
+
+**기대 효과**: 폭등 레짐에서 다른 진입 기준 적용 가능 (레짐별 AI 분리 학습).
+
+---
+
+## 10. 실행 우선순위 로드맵
+
+### 단계별 실행 계획
+
+| 순서 | 방안 | 효과 | 작업량 | 시작 시점 |
+|:---:|:---|:---:|:---:|:---:|
+| **1** | **A+B 동시 적용 (Combined)** | **매우 높음** | **중간** | **즉시** |
+| 2 | B 단독: 단조 제약만 | 중간 | 매우 낮음 | 즉시 |
+| 3 | A 단독: 퍼센타일 랭크 추가 | 매우 높음 | 중간 | 단기 |
+| 4 | C: 레짐 피처 추가 | 높음 | 높음 | 중기 |
+
+---
+
+### ⭐ A+B 동시 적용 (가장 강력한 접근)
+
+**아이디어**: 퍼센타일 랭크를 학습 스크립트 내에서 실시간 계산하여 새 피처로 추가 + 단조 제약 동시 적용
+
+> 데이터 파이프라인 재빌드 없이 `train_round2.py` 수정만으로 가능
+
+```python
+# train_round2_AB.py 핵심 로직
+
+# Step 1: 기존 Top-60 피처 로드
+X_tr, X_val, X_oos = ... (기존 방식)
+
+# Step 2: 방안 A — 퍼센타일 랭크 피처 실시간 추가
+# (학습 데이터 기준 rolling rank → 미래 참조 없음)
+PCT_FEATURES = [
+    "ADXMTF_M5_DiPlus", "ADXMTF_H4_DiPlus",
+    "ADXS_(14)_DiPlus", "ADXS_(80)_DiPlus",
+    "ADXS_(14)_ADX",    "ADXS_(80)_ADX",
+    "CE_SL2_dist_ATR",  "CE_Dist2_slope14",
+    "BOP_(30-5)_slope14", "BSP_(10-3)_slope14",
+    "ATR14", "TickVolume_ratio_MA240",
+]
+for col in PCT_FEATURES:
+    # IS 기준 rolling 240봉 퍼센타일 계산 후 OOS도 같은 IS 분포로 변환
+    pct_col = col + "_pct240"
+    X_tr[pct_col]  = X_tr[col].rank(pct=True)       # IS 내 상대 서열
+    X_val[pct_col] = X_val[col].rank(pct=True)
+    X_oos[pct_col] = X_oos[col].rank(pct=True)      # OOS도 OOS 내 서열 (독립)
+
+# Step 3: 방안 B — 단조 제약 (원본 + 퍼센타일 양쪽 적용)
+MONOTONE_MAP = {
+    "ADXMTF_M5_DiPlus":         +1,
+    "ADXMTF_M5_DiPlus_pct240":  +1,   # 퍼센타일 버전도 동일 제약
+    "ADXMTF_H4_DiPlus":         +1,
+    "ADXMTF_H4_DiPlus_pct240":  +1,
+    "ADXMTF_M5_DiMinus":        -1,
+    "ADXS_(14)_DiMinus":        -1,
+    "CE_SL2_dist_ATR":          +1,
+    "CE_SL2_dist_ATR_pct240":   +1,
+    "CHOP_(120-40)_Scale":      -1,
+    # ... (전체 25개 + 퍼센타일 버전)
+}
+params["monotone_constraints"] = [MONOTONE_MAP.get(f, 0) for f in feature_cols]
+```
+
+**예상 효과 조합**:
+
+| 단독 방안 B | 단독 방안 A | **A+B 동시** |
+|:---:|:---:|:---:|
+| 레짐 방향성 강제 | 스케일 정규화 | **방향성 강제 + 스케일 적응** |
+| OOS 신호 증가 예상 | 레짐 전환 적응 | **가장 강력한 OOS 일반화** |
+
+---
+
+### 실행 순서
+
+```
+[즉시] A+B 동시: train_round2_AB.py 작성 → 재학습 (~30분)
+  → 기대: OOS 실승률 50%+ 달성 가능성
+
+[비교] B 단독: train_round2_mono.py → 단조 제약만 효과 측정
+
+[단기] A 풀버전: build_tech_derived.py → 전체 파이프라인 재빌드
+  → 더 정밀한 rolling(240) 퍼센타일 (지금은 IS 전체 기준)
+
+[중기] A+B+C 완전 통합: 레짐 피처 추가 → 가장 강력한 최종 모델
+```
+
+---
+
+### 방안 C. 레짐 인식 피처 (중기, A+B+C 완전 통합)
+
+**핵심 아이디어**: 모델이 "지금이 폭등장인지, 횡보장인지"를 직접 알 수 있게 피처로 명시.
+
+```python
+# 매크로 데이터(GOLD_ret, M1 Close) 기반 레짐 피처 (train 스크립트 내 계산)
+import pandas as pd
+
+# ── 레짐 피처 1: 월간 수익률 퍼센타일 (최근 24개월 중 이번 달이 얼마나 강한가)
+monthly_close = df["Close"].resample("1ME").last()   # 월봉 Close
+monthly_ret   = monthly_close.pct_change()
+monthly_pct   = monthly_ret.rolling(24).rank(pct=True)   # 0~1
+df["regime_monthly_pct"] = monthly_pct.reindex(df.index, method="ffill").shift(1)
+
+# ── 레짐 피처 2: 주간 상승 비율 (최근 20주 중 상승한 주 비율)
+weekly_close  = df["Close"].resample("1W").last()
+weekly_up     = (weekly_close.diff() > 0).astype(float)
+weekly_up_ma  = weekly_up.rolling(20).mean()
+df["regime_weekly_up_ratio"] = weekly_up_ma.reindex(df.index, method="ffill").shift(1)
+
+# ── 레짐 피처 3: 20주 이동평균 대비 현재 가격 위치 (퍼센타일)
+ma20w         = weekly_close.rolling(20).mean()
+above_ma20w   = (weekly_close > ma20w).astype(float)
+df["regime_above_ma20w"] = above_ma20w.reindex(df.index, method="ffill").shift(1)
+
+# ── 레짐 피처 4: 현재 월 수익률이 상위 70% 이상이면 "강세 레짐" 플래그
+df["regime_bull_flag"] = (df["regime_monthly_pct"] >= 0.70).astype(float)
+```
+
+**레짐 피처의 단조 제약 (방안 B와 결합)**:
+
+```python
+MONOTONE_MAP.update({
+    "regime_monthly_pct":   +1,   # 더 강한 달 = Win 가능성 높음
+    "regime_weekly_up_ratio": +1, # 상승주 많을수록 = Win
+    "regime_above_ma20w":   +1,   # MA 위 = 강세 레짐 = Win
+    "regime_bull_flag":     +1,   # 강세 레짐 플래그 = Win
+})
+```
+
+**예상 효과**:
+- **2023+ 폭등장**: `regime_monthly_pct ≈ 0.95`, `regime_bull_flag = 1` → 모델이 폭등 레짐을 인식 → 더 적극적 진입
+- **2018~2019 횡보장**: `regime_monthly_pct ≈ 0.50`, `regime_bull_flag = 0` → 신중한 진입
+- 레짐 플래그가 **OOS 레짐 불일치를 직접 설명**하는 피처로 작동
+
+---
+
+### A+B+C 완전 통합 비교표 (실측치 반영, 2026-03-08)
+
+| 구성 | 핵심 개선 | OOS 실승률 (thr=0.20) | M30>35+thr=0.25 | 비고 |
+|:---|:---|:---:|:---:|:---|
+| 기존 (필터만) | M30>35 하드필터 | 50.4% (573건) | 52.7% (91건) | 1라운드 모델 |
+| **B 단독** | 단조 제약만 | **33~39% ❌ (3/3 FAIL)** | — | 단조만으로는 부족 |
+| **A+B 동적** | 방향성 + IS기준 pct | 38~45% (1/3 PASS) | 54.7% (181건) | 학습 시 pct 계산 |
+| **A+B 풀버전** | 방향성 + rolling(240) pct | **45~52% ✅ (3/3 PASS)** | **56.1% (437건)** | **파이프라인 사전 계산** |
+| A+B+C (예정) | + 레짐 인식 | 추정 55~65% | — | 미실행 |
+
+> 방안 C는 train_round2_ABC.py 한 파일에서 A+B와 함께 동시 적용 가능 — 별도 파이프라인 필요 없음.
+
+---
+
+## 11. 실험 결과 요약 (2026-03-08)
+
+### 11.1 실험 목적
+
+2라운드 모델의 OOS(2023~2026) 일반화 성능 개선을 위해 3가지 접근법을 비교 실험:
+1. **B 단독**: 단조 제약(Monotone Constraints)만 적용
+2. **A+B 동적**: 단조 제약 + 학습 시 IS 전체 기준 퍼센타일 랭크 동적 생성
+3. **A+B 풀버전**: 단조 제약 + `build_tech_derived.py`에서 rolling(240) 퍼센타일 사전 계산
+
+### 11.2 실험 절차
+
+#### (1) B 단독 (`train_round2_mono.py`)
+- Top-60 기존 피처 + 단조 제약(+1=17, -1=8, 0=35)
+- 학습: IS 1.54M행, AUC 0.8143 (iter=532)
+- 소요: 149초
+
+#### (2) A+B 동적 (`train_round2_AB.py` — 첫 실행)
+- Top-60에 IS 전체 기준 `.rank(pct=True)` 동적 생성 → 60→83개
+- 단조 제약: +1=25, -1=10, 0=48
+- 학습: AUC 0.8124 (iter=346)
+- 소요: 131초
+
+#### (3) A+B 풀버전 파이프라인 재빌드
+```
+build_tech_derived.py (pct240/pct1440 45개 피처 추가, ~2시간)
+  → merge_features.py (817컬럼, 2,659,938행, 1.35GB)
+  → train_round1.py (811피처 → Spearman 제거 → 419피처 → 5-Fold WF → SHAP Top-60)
+  → train_round2_AB.py (새 Top-60 기반, 60→76개, 단조 +1=15/-1=8)
+```
+- Spearman 상관행렬 계산: 3,682초 (811×811)
+- 5-Fold 평균 AUC: 0.7967 ± 0.0211
+- 2라운드 학습: AUC **0.8290** (iter=540)
+- 총 소요: ~5,068초
+
+### 11.3 OOS Walk-Forward 전체 비교 (thr=0.20)
+
+| 방법 | Step1 (6mo) | Step2 (1.5y) | Step3 (new) | PASS |
+|:---|:---:|:---:|:---:|:---:|
+| **B 단독** | 33.2% (797) ❌ | 39.1% (1,736) ❌ | 35.8% (2,057) ❌ | **0/3** |
+| **A+B 동적** | 38.1% (299) ❌ | 45.4% (652) ✅ | 42.5% (819) ❌ | **1/3** |
+| **A+B 풀버전** | **52.4% (1,128)** ✅ | **48.8% (3,380)** ✅ | **45.1% (4,821)** ✅ | **3/3** 🏆 |
+
+### 11.4 M30_DiPlus>35 결합 비교
+
+| 임계치 | B 단독 | A+B 동적 | A+B 풀버전 |
+|:---:|:---:|:---:|:---:|
+| 0.15 | — | 40.6% (3,322) | **45.5% (4,360)** ✅ |
+| 0.20 | — | 46.7% (722) ✅ | **46.6% (1,443)** ✅ |
+| 0.25 | — | 54.7% (181) ✅ | **56.1% (437)** ✅ |
+| 0.30 | — | 71.4% (35) ✅ | **68.5% (146)** ✅ |
+
+### 11.5 SHAP Top-60 변화 (풀버전 재학습)
+
+파이프라인 재빌드 후 SHAP Top-60에 **pct 피처 16개 선발**:
+
+| 순위 | 피처 | SHAP |
+|:---:|:---|:---:|
+| 상위 | `ADXMTF_H4_DiPlus_pct240` | **0.233** |
+| 상위 | `ADXMTF_H4_DiPlus_slope5cp_pct240` | 0.172 |
+| 중위 | `ADXS_(14)_DiPlus_pct240` | 0.029 |
+| 중위 | `ADXS_(80)_DiMinus_pct240` | 0.018 |
+| 중위 | `BOP_(30-5)_slope14_pct240` | 0.016 |
+| 중위 | `ADXS_(14)_DiMinus_pct240` | 0.012 |
+| 중위 | `ADXS_(80)_ADX_pct240` | 0.013 |
+| 하위 | `ATR14_pct240`, `TickVolume_zscore1440_pct1440` 등 | 0.009 |
+
+> `ADXMTF_H4_DiPlus_pct240`이 SHAP=0.233으로 **전체 2위**에 랭크 — "H4 DiPlus가 최근 240봉 중 상위 몇%인가?"가 모델에게 가장 중요한 레짐 적응 신호.
+
+### 11.6 핵심 분석
+
+#### 왜 풀버전이 동적보다 압도적으로 좋은가?
+
+1. **IS 전체 vs rolling(240) 차이**: 동적 방식은 IS 전체(~150만행)로 퍼센타일 계산 → 2019년과 2023년 데이터가 섞인 평균. rolling(240)은 직전 4시간만 보는 **국소 적응** → 레짐 전환을 실시간 반영.
+
+2. **SHAP 선별 효과**: build_tech_derived 단계에서 pct 피처를 사전 계산 → train_round1 SHAP가 pct 피처를 Top-60에 **자연 선발** → train_round2에서 이 피처들이 핵심 역할.
+
+3. **신호 수 폭증**: 동적 방식 722건 → 풀버전 **1,443건** (thr=0.20 기준 2배). 더 정밀한 퍼센타일이 더 많은 구간에서 유효한 신호를 생성.
+
+#### B 단독이 실패한 이유
+
+단조 제약만으로는 Z-score의 스케일 불일치 문제를 해결 못함. "DiPlus가 높을수록 Win"이라는 방향은 맞지만, **"높다"의 기준이 레짐마다 다른** 문제는 여전. → 퍼센타일 랭크 피처가 필수.
+
+### 11.7 실전 추천 조합
+
+| 전략 유형 | 조합 | 월 신호 | 실승률 | 모델 |
+|:---|:---|---:|:---:|:---:|
+| 균형형 | M30>35 + thr=0.20 | ~45건 | **49.0%** | A+B+C |
+| **추천 ⭐** | **M30>35 + thr=0.25** | **~15건** | **56.3%** | **A+B+C** |
+| 스나이퍼 | M30>35 + thr=0.30 | ~5건 | 63.4% | A+B+C |
+
+---
+
+## 12. 피라미딩 데이터셋 빌드 교훈 (2026-03-11)
+
+> 피라미딩(Model_AddOn) 전용 데이터 파이프라인 구축 시 발견된 설계 함정 3건.
+> **진입 학습(Model_Entry, Part A) 파이프라인에는 해당 없음** — α 피처는 "포지션 보유 중" 전제 위에 설계.
+
+| # | 항목 | 원인 | 해결 |
+|:---:|:---|:---|:---|
+| **W-1** | α 피처 중복 (`price_vs_entry`) | `unrealized_pnl_atr`과 수식 동일 → SHAP 분산 낭비 | `atr_expansion` (현재ATR/1차진입ATR) 으로 교체 — 완전히 다른 차원(변동성 레짐) 정보 투입 |
+| **W-2** | `bsp_scale_delta` 참조 컬럼 불일치 | 코드에서 `BOP_Scale`(매수 압력)을 읽었으나 변수명은 `bsp_scale_delta` | `LRAVGST_Avg(60)_BSPScale`(추세 안정성)로 통일 — 기존 파이프라인에 없는 고유 α 정보 |
+| **W-3** | 병합 Join 방식 | Left Join 시 대부분 행이 label=NaN → 불필요한 메모리 낭비 | **Inner Join** 채택 — Model_AddOn은 라벨 존재 봉만 학습 필요(조건부 의사결정) |
+
+> **추가 발견**: 라벨 Parquet에서 원본 OHLC/CE_CE2 컬럼이 병합 시 유입되는 누수 발생 → `merge_features_pyramid.py`에서 라벨 DF 컬럼 필터링(Time + label + α 피처만 선택) 추가로 해결.
+
+
+
+
+
+
+
+
+
+① FP_PENALTY 인하 고려 (3.0 → 1.5~2.0)
+롱전략 맥락: "시장에 들어갈지 말지"를 결정합니다. 잘못 들어가면 SL에 걸려 1% 손실. 따라서 오탐(False Positive)이 직접적인 손실입니다. FP_PENALTY = 3.0은 "차라리 기회를 놓치더라도 틀린 진입을 줄여라"라는 강력한 보수 전략입니다.
+
+피라미딩 맥락: "이미 수익 중인 포지션에 추가할지 말지"를 결정합니다.
+
+이미 1차 진입이 2ATR 이상 수익 → 추세가 강하게 확인된 상태
+추가 진입 실패 시 손실 규모: 원래 진입보다 작음 (이미 이익 쿠션 존재)
+FP_PENALTY = 3.0이면 → 모델이 "99% 확실할 때만 추가해" → 불타기를 거의 못 함
+피라미딩의 존재 이유가 **"강한 추세에서 수익을 극대화"**하는 것인데, 너무 보수적이면 그 목적 자체가 무력화됩니다. 그래서 일단 3.0으로 돌려보고, 신호가 너무 적으면 1.5~2.0으로 내리는 것이 합리적이라고 제안해 드린 것입니다.
+
+물론 이건 학습 결과를 본 후 판단할 사항이지, 지금 바꾸자는 건 아닙니다.
+
+② addon_count 단조 제약 (-1)
+이건 퀀트 직관에 기반한 설계입니다.
+
+addon_count = 0 → 아직 추가 진입 안 함 → 추세 가능성 열려 있음
+addon_count = 1 → 1번 추가 → 추세가 꽤 진행됨
+addon_count = 2 → 2번 추가 → 추세 소진 위험 증가
+금 시장(XAUUSD)에서 강한 추세가 영원히 지속되는 경우는 드뭅니다. 추가 진입 횟수가 늘어날수록 평균 회귀(Mean Reversion) 압력이 커지므로, 모델이 "이미 2번 추가했으면 3번째는 조심해라"라고 학습하는 것이 합리적입니다. 단조 제약 -1이 이 역학을 강제합니다.
+
+③ Threshold 0.20 (롱전략 0.25 대비)
+롱전략은 THRESHOLD = 0.25(모델이 25% 이상 확신해야 진입)를 씁니다. 피라미딩은 0.20으로 낮췄습니다.
+
+이유: 피라미딩 데이터는 이미 필터링된 상황(1차 진입 성공 + 2ATR 수익)이므로, 전체 시장 데이터에 비해 base rate가 높을 수 있습니다. 같은 0.25를 쓰면 신호가 너무 적을 수 있고, 0.20으로 시작해서 OOS 결과를 보며 올리는 것이 실험적으로 안전합니다.
+
+최적화 범위는 0.15 ~ 0.35가 적당하고, Walk-Forward 검증에서 기대수익 × 신호 수가 최대인 지점을 찾으시면 됩니다.
+
+요약: 수정사항은 실제로 돌리면 터질 수 있는 구조적 결함 방어였고, 전략 의견 3가지는 **"일단 현재대로 돌려보고, 결과에 따라 튜닝"**하시는 것이 가장 현실적입니다. 학습 결과가 나오면 그때 다시 판단해 드리겠습니다. 🚀

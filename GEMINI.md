@@ -185,6 +185,37 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 - **Python**: `C:\Python314\python.exe`
 - **MCP Server**: `{PROJECT_ROOT}\mcp-metatrader5-server`
 
+### ⚠️ macOS 도구 우회 규칙 (CRITICAL — 항상 적용)
+
+> **배경**: Antigravity `language_server_macos_x64`가 x64(Rosetta) 프로세스로 실행 중이어서,  
+> arm64로 빌드된 내장 `fd` 바이너리를 fork/exec 시 **"bad CPU type in executable"** 오류 발생.  
+> (근본 원인: Antigravity arm64 language server 미배포 — 앱 업데이트 대기 중)
+
+#### 🚫 사용 금지 도구 (오류 발생)
+| 금지 도구 | 오류 원인 |
+|:---|:---|
+| `find_by_name` | 내장 `fd` 바이너리 호출 → CPU 타입 불일치 |
+| `mcp_filesystem_read_file` | allowedDirectories 경로 불일치 |
+| `mcp_filesystem_write_file` | allowedDirectories 경로 불일치 |
+| `mcp_filesystem_list_directory` | allowedDirectories 경로 불일치 |
+| `mcp_filesystem_search_files` | 내장 `fd` 바이너리 호출 → CPU 타입 불일치 |
+
+#### ✅ 대체 도구 (항상 이것을 사용)
+| 원래 도구 | 대체 도구 | 예시 |
+|:---|:---|:---|
+| `find_by_name` (파일 탐색) | `run_command` + `find` | `find /path -name "*.py" -maxdepth 3` |
+| `mcp_filesystem_read_file` (파일 읽기) | `view_file` | `view_file(AbsolutePath=...)` |
+| `mcp_filesystem_list_directory` (디렉토리 목록) | `run_command` + `ls` | `ls /path/` |
+| `mcp_filesystem_search_files` (내용 검색) | `grep_search` | `grep_search(Query=..., SearchPath=...)` |
+| `mcp_filesystem_write_file` (파일 쓰기) | `write_to_file` or `replace_file_content` | *(기존 도구 그대로 사용)* |
+
+```bash
+# 파일 검색 예시 (find_by_name 대체)
+find "/Users/gim-yongsu/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5" -name "*.py" -maxdepth 3 2>/dev/null
+```
+
+---
+
 ## 5. MCP Servers (AI Tools) - *No Training Required*
 **별도의 학습 없이 아래 도구를 즉시 호출하세요.**
 

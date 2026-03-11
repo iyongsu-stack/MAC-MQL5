@@ -156,3 +156,29 @@
 4. 점 위 마우스 호버 → 진입가/청산가/PnL/청산유형 툴팁 확인
 
 > `ABC_signals_M30gt35_thr025.csv` 컬럼: Time, Close, Prob, M30_DiPlus, Win, Ret_pts, Exit_type, ATR14
+
+---
+
+# 피라미딩(Pyramiding) V2 라벨링 (2026-03-10 추가)
+
+기존 1차 진입(CE Trailing Stop 기반) 이후, 추세 진행 중 **추가 진입(불타기)** 타점을 학습하기 위한 라벨링 스크립트 및 기준입니다.
+
+## 핵심 로직 (3-Barrier 변형)
+1. **Pullback Exclusion (눌림목 배제)**: 직전 고점 대비 `1.0 × ATR` 이상 하락한 상태(Pullback State)에서는 신규 진입을 라벨링하지 않습니다.
+2. **SL (손절매)**: `entry - 2.5 × ATR14`
+3. **CE_TS (트레일링 스탑 청산)**: Chandelier Exit 이탈 시 청산 (이때 수익이 `+2.0 × ATR14` 이상일 경우만 **Win (1)** 판정, 나머지는 **Loss (0)**)
+4. **마찰 비용**: 30포인트 ($0.30) 고정 차감
+
+## 스크립트 및 출력
+- **스크립트**: `Files/Tools/sim_label_pyramiding_v2.py`
+- **입출력**:
+  - `tech_features.parquet`, `labels_barrier.parquet` 원본/정답지 읽음
+  - `labels_pyramiding_v2.parquet` 생성 (AI 학습용 통합 파켓, Win/Loss 모두 포함)
+  - `pyramiding_v2_wins.csv` 생성 (MT5 시각적 검증용: Win 전용 파란 화살표)
+  - `pyramiding_v2_all.csv` 생성 (MT5 시각적 검증용: Win(파란색)/Loss(핑크색) 전체 포함)
+
+## MT5 시각적 검증
+`Scripts/ShowLabelingResult.mq5` 를 차트에 적용하여 `pyramiding_v2_all.csv` 등 분리된 CSV를 입력하면:
+- **Win (수익 > 2.0 ATR)**: 두껍고 파란색 화살표 (🔵)
+- **Loss (수익 < 2.0 ATR 또는 SL 터치)**: 얇고 핑크색/마젠타색 화살표 (🔴)
+로 직관적인 진입/패배 타점을 확인할 수 있습니다.
