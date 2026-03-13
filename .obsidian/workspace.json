@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "fd936ea80d9c50ef",
+        "id": "5de177757276c260",
         "type": "tabs",
         "children": [
           {
-            "id": "3110d80f1a5070da",
+            "id": "252563034c596c5e",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Docs/TrendTrading Development Strategy/롱 학습결과 분석.md",
+                "file": "Docs/TrendTrading Development Strategy/Pyramiding.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "롱 학습결과 분석"
+              "title": "Pyramiding"
             }
           }
         ]
@@ -183,23 +183,28 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "3110d80f1a5070da",
+  "active": "252563034c596c5e",
   "lastOpenFiles": [
-    "Indicators/BSP105V8/BSPWMA3.log",
-    "Include/Math/Alglib/solvers.log",
-    "Indicators/Examples/ColorBars.log",
-    "Indicators/BSP105V6/BSPWMA.log",
-    "Indicators/BSP105V6/LRAVGSTD.log",
+    "Profiles/Charts/Default/order.wnd",
+    "Include/AIEngine/CFeatureEngine.mqh",
+    "Scripts/TestCTradeExecutor.mq5",
+    "Include/AIEngine/CTradeExecutor.mqh",
+    "Include/AIEngine/CSignalGenerator.mqh",
+    "Docs/SystemArchitecture/PossibleErrorAndTest.md",
+    "Include/AIEngine/CEventFilter.mqh",
+    "Include/AIEngine/COnnxPredictor.mqh",
+    "Include/AIEngine/CMacroLoader.mqh",
+    "Scripts/TestCRollingStats.mq5",
+    "Include/AIEngine/FeatureSchema.mqh",
+    "Files/models/pyramid_round2_ABC/model_addon_ABC.onnx",
+    "Docs/SystemArchitecture/SoftwareDevelopmentPlan.md",
+    "Docs/SystemArchitecture/SystemArchitecture.md",
+    "Docs/TrendTrading Development Strategy/SystemArchitecture.md",
+    "Docs/TrendTrading Development Strategy/Pyramiding.md",
     "Docs/TrendTrading Development Strategy/롱 학습결과 분석.md",
     "Docs/TrendTrading Development Strategy/롱진입조건_탐색_분석보고서.md",
     "Docs/TrendTrading Development Strategy/XAUUSD_AI_전략개발_종합_로드맵.md",
     "Docs/TrendTrading Development Strategy/Labeling.md",
-    "Files/Tools/sim_ai_ce_exit.py",
-    "Files/processed/ABC_signals_v2_thr020.csv",
-    "Scripts/UnitTests/Stat/TestStatPrecision.log",
-    "Scripts/ShowAISignalResult.log",
-    "Scripts/test.log",
-    "Scripts/Examples/Canvas/CanvasSample.log",
     "Docs/TrendTrading Development Strategy/Memo.md",
     "Docs/TrendTrading Development Strategy/기술지표_입력값_DB_조회본.md",
     "Docs/TrendTrading Development Strategy/데이터_파이프라인_컬럼_명세서.md",
@@ -216,11 +221,6 @@
     "Docs/DB FrameWork.md",
     "Docs/DB.md",
     "Files/Comparison_BOP_BSP.png",
-    "Agents/1_Data_Prep.md",
-    "Docs/Prompt/Make-Strategy.md",
-    "Docs/Prompt/Order.md",
-    "Docs/Analysis_Report.md",
-    "Indicators/python_converter_list.md",
-    "Data/1st-Strategy-HighUpstream-Strategy/Position Data Sample.md"
+    "Agents/1_Data_Prep.md"
   ]
 }

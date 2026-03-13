@@ -159,26 +159,46 @@
 
 ---
 
-# 피라미딩(Pyramiding) V2 라벨링 (2026-03-10 추가)
+# 피라미딩(Pyramiding) Model_AddOn 라벨링 — 재설계 (2026-03-11)
 
-기존 1차 진입(CE Trailing Stop 기반) 이후, 추세 진행 중 **추가 진입(불타기)** 타점을 학습하기 위한 라벨링 스크립트 및 기준입니다.
+기존 1차 진입(CE Trailing Stop 기반) 이후, 추세 진행 중 **추가 진입(Model_AddOn)** 타점을 학습하기 위한 라벨링입니다.
 
-## 핵심 로직 (3-Barrier 변형)
-1. **Pullback Exclusion (눌림목 배제)**: 직전 고점 대비 `1.0 × ATR` 이상 하락한 상태(Pullback State)에서는 신규 진입을 라벨링하지 않습니다.
-2. **SL (손절매)**: `entry - 2.5 × ATR14`
-3. **CE_TS (트레일링 스탑 청산)**: Chandelier Exit 이탈 시 청산 (이때 수익이 `+2.0 × ATR14` 이상일 경우만 **Win (1)** 판정, 나머지는 **Loss (0)**)
-4. **마찰 비용**: 30포인트 ($0.30) 고정 차감
+## 핥심 라벨링 전략 (2단계 CE파동 기반)
 
-## 스크립트 및 출력
-- **스크립트**: `Files/Tools/sim_label_pyramiding_v2.py`
+**[1단계: 파동 판별]** — label_long=1 봉 기준 CE2 Forward Scan:
+
+| 판정 조건 | 결과 |
+|:---|:---|
+| SL(7×ATR) 터치 먼저 | 패배 파동 → SKIP |
+| CE2 발동, PnL < 4×ATR | 패배 파동 → SKIP |
+| CE2 발동, PnL ≥ 4×ATR | ✅ 승리 파동 |
+
+**[2단계: 봉별 label_addon]** — 승리 파동 내 봉만:
+
+| 조건 | 라벨 |
+|:---|:---|
+| 전제: unrealized_pnl > 0.3×ATR (수익 중) | — |
+| (CE2청산가 - Open봉 - 30pt) > 1×ATR | label_addon = **1 (WIN)** |
+| (CE2청산가 - Open봉 - 30pt) ≤ 1×ATR | label_addon = **0 (LOSS)** |
+
+## 포인트 설정 (확정)
+
+| 파라미터 | 값 | 얭할 |
+|:---|:---:|:---|
+| `SL_ATR_MULT` | **7.0** | A안: 롱전략과 동일 SL 공유 |
+| `WAVE_MIN_ATR` | **4.0** | 승리 파동 최소 수익 기준 |
+| `ADDON_MIN_ATR` | **1.0** | 봉별 WIN 최소 수익 기준 |
+| `FRICTION_PT` | **0.30** | 마찰비용 30pt |
+
+## 스크립트 및 제도
+
+- **스크립트**: `Files/Tools/build_pyramid_labels_full.py` (재설계 v2)
 - **입출력**:
-  - `tech_features.parquet`, `labels_barrier.parquet` 원본/정답지 읽음
-  - `labels_pyramiding_v2.parquet` 생성 (AI 학습용 통합 파켓, Win/Loss 모두 포함)
-  - `pyramiding_v2_wins.csv` 생성 (MT5 시각적 검증용: Win 전용 파란 화살표)
-  - `pyramiding_v2_all.csv` 생성 (MT5 시각적 검증용: Win(파란색)/Loss(핑크색) 전체 포함)
+  - 입력: `tech_features.parquet`, `labels_barrier.parquet`
+  - 출력: `labels_pyramiding_full.parquet` (정답지: label_addon 0/1 + α 피처 6개)
 
 ## MT5 시각적 검증
-`Scripts/ShowLabelingResult.mq5` 를 차트에 적용하여 `pyramiding_v2_all.csv` 등 분리된 CSV를 입력하면:
-- **Win (수익 > 2.0 ATR)**: 두껍고 파란색 화살표 (🔵)
-- **Loss (수익 < 2.0 ATR 또는 SL 터치)**: 얇고 핑크색/마젠타색 화살표 (🔴)
-로 직관적인 진입/패배 타점을 확인할 수 있습니다.
+
+`Scripts/ShowLabelingResult.mq5`에서 추후 파재스코드된 CSV를 로드하여:
+- **WIN (label_addon=1)**: 새 파동에서 1ATR 이상 수익 예상 진입점 (Blue)
+- **LOSS (label_addon=0)**: 고점 근처 늦은 추가진입 또는 승리파동 외 모든 봉 (Pink)

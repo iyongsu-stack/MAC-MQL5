@@ -165,10 +165,14 @@ def build_resume_context(n_sessions: int = 4) -> str:
     lines.append(f"[ 최근 {len(sessions)}개 대화 세션 ]")
     for s in sessions:
         lines.append(f"  📅 {s.get('date','')} | {s.get('summary','')[:80]}")
-        if s.get("topics"):
-            lines.append(f"     주제: {s.get('topics','').replace('|', ', ')}")
-        if s.get("files_touched"):
-            lines.append(f"     파일: {s.get('files_touched','').replace('|', ', ')}")
+        topics = s.get("topics", "")
+        if topics:
+            topics_str = ", ".join(topics) if isinstance(topics, list) else topics.replace("|", ", ")
+            lines.append(f"     주제: {topics_str}")
+        ft = s.get("files_touched", "")
+        if ft:
+            ft_str = ", ".join(ft) if isinstance(ft, list) else ft.replace("|", ", ")
+            lines.append(f"     파일: {ft_str}")
 
     files = get_recent_file_states(7)
     lines.append(f"\n[ 최근 7일 수정 파일 — {len(files)}개 ]")

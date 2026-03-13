@@ -246,19 +246,23 @@ Yahoo/FRED → macro_features.parquet ─┤
 
 ---
 
-## Step P1: 피라미딩 전체 구간 라벨링 (build_pyramid_labels_full.py)
+## Step P1: 피라미딩 전체 구간 라벨링 (build_pyramid_labels_full.py) — 재설계 v2
 
 > **입력**: `tech_features.parquet` + `labels_barrier.parquet`
 > **출력**: `labels_pyramiding_full.parquet`
-> **핵심 로직**:
-> - `sim_label_pyramiding_v2.py`의 V2 로직 기반 (기존 스크립트 미수정)
-> - 전체 구간(IS+OOS, 2018-08 ~ 데이터 끝) 라벨링
-> - 3-Barrier: SL = ATR×2.5, TP = ATR×2.0, CE2 청산, Friction $0.30
-> - 눌림목 State Machine (PULLBACK_ATR_DIP=1.0) 으로 눌림목 구간 제외
+> **라벨링 전략 (2단계 CE파동 기반, 2026-03-11 재설계)**:
+> - [1단계] label_long=1 봉 기준 CE2 Forward Scan
+>   - SL(7×ATR) 터치 → 패배 SKIP
+>   - CE2 발동+PnL<4ATR → 패배 SKIP
+>   - CE2 발동+PnL≥4ATR → 승리 파동
+> - [2단계] 승리 파동 내 봉별 label_addon 판정
+>   - 전제: unrealized_pnl > 0.3×ATR
+>   - WIN(1): (CE2청산가 - Open봉 - 30pt) > 1×ATR
+>   - LOSS(0): 나머지
 > - **α 피처 6개** 동시 계산:
->   1. `unrealized_pnl_atr` — (현재가 - 1차진입가) / ATR
+>   1. `unrealized_pnl_atr` — (Open봉 - 1차진입가) / ATR
 >   2. `bars_since_entry` — 1차 진입 후 경과 봉 수
->   3. `bsp_scale_delta` — 진입 시점 대비 BSPScale 변화
+>   3. `bsp_scale_delta` — 진입 시점 대비 `LRAVGST_Avg(60)_BSPScale` 변화
 >   4. `atr_expansion` — 현재ATR / 1차진입ATR (변동성 확장 비율)
 >   5. `trend_acceleration` — BSPScale 5봉 기울기
 >   6. `addon_count` — 이미 추가한 횟수 (초기 0)
@@ -268,7 +272,7 @@ C:\Python314\python.exe "c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal
 ```
 
 **예상 소요**: ~15분
-**검증 포인트**: α 피처 6개 NaN=0, label_pyramid 분포(0/1), 연도별 분포 출력
+**검증 포인트**: 승리파동율, label_addon WIN/LOSS 비율, α 피처 6개 NaN=0, 연도별 분포
 
 ---
 
@@ -298,7 +302,7 @@ C:\Python314\python.exe "c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal
 > **검증 항목**:
 > 1. Macro Shift+1 정합성
 > 2. M5/H4 변화점 일관성
-> 3. `label_pyramid` 컬럼 존재 및 값 분포 (0/1)
+> 3. `label_addon` 컨럼 존재 및 값 분포 (0/1)
 > 4. α 피처 6개 존재 및 NaN 비율
 > 5. 절대값(OHLC, TickVolume) 누수 검증
 

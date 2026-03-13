@@ -5,16 +5,16 @@
 //+------------------------------------------------------------------+
 #property copyright "Yong-su, Kim"
 #property link      "https://www.mql5.com"
-#property version   "1.00"
-#property description "CE Trailing Stop 라벨링 시뮬레이션 결과를 차트에 표시합니다."
-#property description "Win 거래: 진입 시각의 Low 아래에 청색 위철표"
+#property version   "2.00"
+#property description "AI 진입(Entry) + 피라미딩(Addon) + 청산(Exit) 시각화"
+#property description "Entry Win=Blue, Entry Loss=Pink, Addon=Green/Orange, Exit=Red/Lime"
 
 #property script_show_inputs
 
 #include <DKSimplestCSVReader.mqh>
 
 //--- Input parameters
-input string InpFilename = "ce_trailing_wins.csv";  // CSV file name
+input string InpFilename = "sim_visual_entry_pyramid.csv";  // CSV file name
 
 //+------------------------------------------------------------------+
 //| Script program start function                                    |
@@ -50,8 +50,11 @@ void OnStart()
 
    int      plotted          = 0;
    int      skipped          = 0;
-   datetime firstPlottedTime = 0;   // 최초 객체 시각 (차트 자동 이동용)
-   datetime lastPlottedTime  = 0;   // 최후 객체 시각
+   int      entryCount       = 0;
+   int      addonCount       = 0;
+   int      exitCount        = 0;
+   datetime firstPlottedTime = 0;
+   datetime lastPlottedTime  = 0;
 
    for(uint i = 0; i < CSVFile.RowCount(); i++)
    {
@@ -59,12 +62,29 @@ void OnStart()
       datetime inTime = StringToTime(CSVFile.GetValue(i, "InTime"));
       string   symbol = CSVFile.GetValue(i, "Symbol");
       double   pnl    = StringToDouble(CSVFile.GetValue(i, "PnL"));
+      string   type   = CSVFile.GetValue(i, "Type");       // Entry / Addon_1 / Addon_2 / Exit
+      string   exitType = CSVFile.GetValue(i, "ExitType");
+      string   groupStr = CSVFile.GetValue(i, "GroupId");
 
       // Symbol matching (relaxed)
       if(StringFind(currentSymbol, symbol) == -1 && StringFind(symbol, currentSymbol) == -1)
       {
-         skipped++;
-         continue;
+         // Try comparing base names (e.g., XAUUSD in XAUUSD_Duka)
+         string baseSymbol = symbol;
+         int underscorePos = StringFind(symbol, "_");
+         if(underscorePos > 0)
+            baseSymbol = StringSubstr(symbol, 0, underscorePos);
+         
+         string baseChart = currentSymbol;
+         int underscorePos2 = StringFind(currentSymbol, "_");
+         if(underscorePos2 > 0)
+            baseChart = StringSubstr(currentSymbol, 0, underscorePos2);
+         
+         if(StringFind(baseChart, baseSymbol) == -1 && StringFind(baseSymbol, baseChart) == -1)
+         {
+            skipped++;
+            continue;
+         }
       }
 
       // Time range check
@@ -74,7 +94,7 @@ void OnStart()
          continue;
       }
 
-      // Find the bar index for InTime
+      // Find the bar index
       int barIndex = iBarShift(currentSymbol, PERIOD_CURRENT, inTime, false);
       if(barIndex < 0)
       {
@@ -82,40 +102,79 @@ void OnStart()
          continue;
       }
 
-      // Get the Low of that bar
-      double barLow = iLow(currentSymbol, PERIOD_CURRENT, barIndex);
+      double barLow  = iLow(currentSymbol, PERIOD_CURRENT, barIndex);
+      double barHigh = iHigh(currentSymbol, PERIOD_CURRENT, barIndex);
 
-      // Place up-arrow below the Low
-      string objName = StringFormat("WinDot-%d", i);
-      double dotPrice = barLow - 0.3;  // Offset below Low (adjust for visibility)
+      // ── 타입별 오브젝트 생성 ──────────────────────────────────
+      string objName;
+      double dotPrice;
+      int    arrowCode;
+      color  objColor;
+      int    objWidth;
+
+      if(type == "Entry")
+      {
+         // 1차 진입: Low 아래 위화살표
+         objName   = StringFormat("Entry-%d-G%s", i, groupStr);
+         dotPrice  = barLow - 0.5;
+         arrowCode = 233;  // Up arrow ▲
+         objColor  = (pnl > 0) ? clrDodgerBlue : clrMagenta;  // PnL=확률(양수)
+         objWidth  = 3;
+         entryCount++;
+      }
+      else if(type == "Addon" || StringFind(type, "Addon") >= 0)
+      {
+         // 피라미딩 신호 (prob >= 0.25): Low 아래 다이아몬드
+         objName   = StringFormat("Addon-%d", i);
+         dotPrice  = barLow - 0.3;
+         arrowCode = 119;  // Diamond ◆
+         objColor  = clrLime;
+         objWidth  = 2;
+         addonCount++;
+      }
+      else if(type == "Exit")
+      {
+         // 청산: High 위 아래화살표
+         objName   = StringFormat("Exit-%d-G%s", i, groupStr);
+         dotPrice  = barHigh + 0.5;
+         arrowCode = 234;  // Down arrow ▼
+
+         if(exitType == "CE_TP")
+            objColor = clrLime;     // CE 수익 청산 = 연두
+         else
+            objColor = clrRed;      // SL 손절 = 빨강
+
+         objWidth = 3;
+         exitCount++;
+      }
+      else
+      {
+         // 기존 호환: PnL 기반 색상
+         objName   = StringFormat("Dot-%d", i);
+         dotPrice  = barLow - 0.3;
+         arrowCode = 233;
+         objColor  = (pnl > 0) ? clrBlue : clrMagenta;
+         objWidth  = 2;
+      }
 
       if(ObjectCreate(0, objName, OBJ_ARROW, 0, inTime, dotPrice))
       {
-         ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, 233);  // Up arrow
-         
-         if (pnl > 0) {
-             ObjectSetInteger(0, objName, OBJPROP_COLOR, clrBlue);
-             ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
-         } else {
-             ObjectSetInteger(0, objName, OBJPROP_COLOR, clrMagenta);
-             ObjectSetInteger(0, objName, OBJPROP_WIDTH, 1);
-         }
-         
+         ObjectSetInteger(0, objName, OBJPROP_ARROWCODE, arrowCode);
+         ObjectSetInteger(0, objName, OBJPROP_COLOR, objColor);
+         ObjectSetInteger(0, objName, OBJPROP_WIDTH, objWidth);
          ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, true);
-         ObjectSetInteger(0, objName, OBJPROP_HIDDEN, false);   // 수정: 객체 표시
+         ObjectSetInteger(0, objName, OBJPROP_HIDDEN, false);
 
-         // Add tooltip with trade info
+         // Tooltip
          string inPriceStr  = CSVFile.GetValue(i, "InPrice");
          string outPriceStr = CSVFile.GetValue(i, "OutPrice");
          string pnlStr      = CSVFile.GetValue(i, "PnL");
-         string exitType    = CSVFile.GetValue(i, "ExitType");
-         string tooltip     = StringFormat("Entry: %s | Exit: %s | PnL: %s | Type: %s",
-                                           inPriceStr, outPriceStr, pnlStr, exitType);
+         string tooltip     = StringFormat("[%s] G%s | Price: %s | PnL: %s | %s",
+                                           type, groupStr, inPriceStr, pnlStr, exitType);
          ObjectSetString(0, objName, OBJPROP_TOOLTIP, tooltip);
 
          plotted++;
 
-         // 최초/최후 객체 시각 추적
          if(firstPlottedTime == 0 || inTime < firstPlottedTime)
             firstPlottedTime = inTime;
          if(inTime > lastPlottedTime)
@@ -127,24 +186,26 @@ void OnStart()
       }
    }
 
-   // ── 최초 객체 위치로 차트 자동 이동 ──────────────────────────────
+   // ── 최초 객체 위치로 차트 자동 이동 ──────────────────────────
    if(firstPlottedTime > 0)
    {
       int firstBarIdx   = iBarShift(currentSymbol, PERIOD_CURRENT, firstPlottedTime, false);
       int visibleBars   = (int)ChartGetInteger(0, CHART_VISIBLE_BARS);
-      // 최초 객체가 화면 왼쪽 1/4 지점에 오도록 오프셋 적용
       int scrollTarget  = firstBarIdx + (int)(visibleBars * 0.75);
       ChartNavigate(0, CHART_END, scrollTarget);
-      PrintFormat("[AutoScroll] 최초 객체: %s → 바 인덱스 %d (우측부터)",
+      PrintFormat("[AutoScroll] 최초 객체: %s → 바 인덱스 %d",
                   TimeToString(firstPlottedTime, TIME_DATE|TIME_MINUTES), firstBarIdx);
    }
 
    ChartRedraw(0);
 
-   PrintFormat("=== Labeling Result Visualization ===");
+   PrintFormat("=== Visualization Result ===");
    PrintFormat("  Total CSV rows : %d", CSVFile.RowCount());
-   PrintFormat("  Plotted (Win)  : %d", plotted);
+   PrintFormat("  Plotted        : %d", plotted);
+   PrintFormat("    Entry        : %d", entryCount);
+   PrintFormat("    Addon        : %d", addonCount);
+   PrintFormat("    Exit         : %d", exitCount);
    PrintFormat("  Skipped        : %d", skipped);
-   PrintFormat("  Blue up-arrows placed below Low at each winning entry.");
+   PrintFormat("  Legend: Blue▲=Entry, Green◆=Addon1, Orange◆=Addon2, Lime▼=CE_TP, Red▼=SL");
 }
 //+------------------------------------------------------------------+

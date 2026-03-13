@@ -313,13 +313,13 @@ THRESHOLD = 0.20  # 기본 임계치 (실전 0.25 추천)
 >   - `fold_pyramid_results.csv` — Walk-Forward Fold별 AUC
 >   - `lgbm_pyramid_round1.txt` — 최선 모델 저장
 > **핵심 로직**:
-> - **타겟**: `label_pyramid` (Part A의 `label_long`과 다름)
+> - **타겟**: `label_addon` (Part A의 `label_long`과 다름)
 > - **추가 피처**: α 피처 6개 (`unrealized_pnl_atr`, `bars_since_entry`, `bsp_scale_delta`, `atr_expansion`, `trend_acceleration`, `addon_count`)
 > - IS/OOS 분할: 2018-08~2022-12 (학습) / 2023+ (미사용)
 > - Feature Pruning: 스피어만 상관 0.85+ 중복 피처 제거
 > - LightGBM: Expanding Walk-Forward 5-Fold, 표준 Logloss
 > - SHAP: TreeExplainer, |SHAP| 평균 기준 Top-60 선별
-> - **scale_pos_weight**: 실제 label_pyramid 분포에 맞게 재계산 필요
+> - **scale_pos_weight**: 실제 label_addon 분포에 맞게 재계산 필요
 
 ```bash
 # macOS

@@ -157,26 +157,24 @@ TP_LEVELS = [2.0, 2.5, 3.0, 3.5]  # 원하는 값으로 수정
 | `sim_adxmtf_filter_compare.py` | ADXMTF 필터 조합 탐색 + Win CSV 생성 | `Files/Tools/` |
 | `extract_ABC_signals.py` | **AI 신호 CSV 추출** (M30>35+thr=0.25, 503건) | `Files/Tools/` |
 | `ShowLabelingResult.mq5` | MT5 시각화 (녹색 점, 파란/핑크 화살표) | `Scripts/` |
-| `sim_label_pyramiding_v2.py` | 피라미딩 전략 데이터 라벨링 및 AI 파켓/시각화 CSV 생성 | `Files/Tools/` |
+| `build_pyramid_labels_full.py` | 피라미딩 Model_AddOn 라벨링 (재설계 v2, SL=7ATR+CE+4ATR 파동) | `Files/Tools/` |
 
 ---
 
-## Step 5: 피라미딩 라벨링 및 시각화 (Pyramiding V2)
+## Step 5: 피라미딩 Model_AddOn 라벨링 — 재설계 (2026-03-11)
 
-> **목적**: 기존 1차 진입(CE Trailing Stop) 이후, 추세 진행 중 발생하는 추가 진입점(불타기)에 대한 Win/Loss 라벨을 생성 및 검증합니다.
+> **목적**: 롤전략 1차 진입(Win 파동) 내에서 추가 진입(Model_AddOn) 타점에 대한 label_addon(0/1) 생성.
+> **라벨 전략**: SL=7ATR + CE2발동 ≥4ATR 승리파동 판별 + 봉별 (CE2 - Open - 30pt) > 1ATR WIN 판정.
 
 ### 5-1. 피라미딩 라벨 스크립트 실행
 ```powershell
-C:\Python314\python.exe "c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files\Tools\sim_label_pyramiding_v2.py"
+C:\Python314\python.exe "c:\Users\gim-yongsu\AppData\Roaming\MetaQuotes\Terminal\5B326B03063D8D9C446E3637EFA32247\MQL5\Files\Tools\build_pyramid_labels_full.py"
 ```
-- **출력 1**: `labels_pyramiding_v2.parquet` (Win/Loss 통합본, AI 훈련 데이터 생성 시 활용)
-- **출력 2**: `pyramiding_v2_all.csv` (Win/Loss 궤적 검증용 전체 트레이드)
-- **출력 3**: `pyramiding_v2_wins.csv` (Win(수익 >2.0 ATR) 전용)
+- **출력**: `labels_pyramiding_full.parquet` (AI Model_AddOn 학습 정답지)
+  - `label_addon` 콼럼 (0/1) + α 피처 6개 (`unrealized_pnl_atr`, `bars_since_entry`, `bsp_scale_delta`, `atr_expansion`, `trend_acceleration`, `addon_count`)
+  - `wave_ce2_price`, `wave_pnl_atr`, `addon_pnl_atr` (디버깅/분석용)
+- **예상 시간**: ~15분
+- **검증 포인트**: 승리파동율, label_addon WIN/LOSS 비율, 연도별 분포 출력 확인
 
-### 5-2. MT5 차트에서 시각적 평가 (Loss 포함)
-1. MT5 차트에 `ShowLabelingResult.mq5` 스크립트를 재컴파일 후 드래그 앤 드롭
-2. Input 창에서 분석할 CSV를 입력 (데이터 구동 방지를 위해 `pyramiding_v2_all.csv` 를 파이썬에서 분할하여 넣는 것을 권장)
-3. 시각화 결과 확인:
-   - **Win (수익 > 2.0 ATR)**: 두껍고 파란색 화살표 (🔵)
-   - **Loss (수익 < 2.0 ATR 또는 -2.5 ATR 손절)**: 얇고 핑크색/마젠타색 화살표 (🔴)
-4. 점검 포인트: Loss 화살표가 Pullback(눌림목 하락 구간)에서는 찍히지 않고 상승 추세 진행 중에만 찍히는지 확인할 것.
+### 5-2. 다음 단계
+`/data-build` Part B 쪨 Step P2(병합), Step P3(검증) 순서로 진행.

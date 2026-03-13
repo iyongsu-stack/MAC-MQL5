@@ -102,8 +102,8 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 ## 3. Operational Rules (CRITICAL)
 - **Language Policy**: **모든 상호작용(대화/생각/주석)은 한국어(Korean)로 진행.** (코드는 영어)
 
-### 🚨 데이터베이스 작성 7대 핵심 원칙 (절대 준수) 🚨
-> 이 7가지 원칙은 모든 스크립트 작성, 데이터 분석, 모델 학습, 시뮬레이션, 승률 계산, DB 기록에 **자동으로** 그리고 **예외 없이** 적용되어야 합니다. (DB 쿼리: `SELECT * FROM StrategyRule WHERE type IN ('핵심원칙','데이터무결성','전략구조')`)
+### 🚨 데이터베이스 작성 8대 핵심 원칙 (절대 준수) 🚨
+> 이 8가지 원칙은 모든 스크립트 작성, 데이터 분석, 모델 학습, 시뮬레이션, 승률 계산, DB 기록에 **자동으로** 그리고 **예외 없이** 적용되어야 합니다. (DB 쿼리: `SELECT * FROM StrategyRule WHERE type IN ('핵심원칙','데이터무결성','전략구조')`)
 
 1. **Rule_Shift+1** (미래 참조 편향 방지) ★★★
    - 상위 TF(H1/매크로)를 M1에 병합 시 **직전 완성봉(Shift+1)만 사용**. Z-score: `x.shift(1).rolling(W)`, 매크로 병합 전 `shift(1)` 적용. (미래 정보 참조 완전 차단)
@@ -124,6 +124,11 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
    - 매크로 피처 NaN은 `ffill`로만 처리. `bfill`은 미래참조이므로 **절대 사용 금지**.
 7. **Winsorization** (이상치 클리핑)
    - 극단 이상치(Z-score ±10 이상)는 삭제 대신 **상하위 1~5% 클리핑**으로 극단 이벤트 정보 보존. 딥러닝 필수, 트리 모델 선택.
+8. **Rule_Python_MQL5_Fidelity** (Bug-for-Bug 호환 원칙) ★★★
+   - MQL5 `CRollingStats.mqh`의 `GetSlope`/`GetZScore`/`GetPctRank`는 Python 학습 파이프라인(`build_tech_derived.py`)과 **수학적으로 100% 동일한 연산**을 수행해야 한다.
+   - **금지 사항**: GetSlope을 Linear Regression으로 변경, GetZScore에 현재봉 포함, GetPctRank 타겟을 현재봉으로 변경하는 행위는 **모델 재학습 없이 절대 금지**.
+   - **변경 시**: 반드시 Python 스크립트와 MQL5 코드를 **동시에** 수정하고, 교차 검증 스크립트(`/mql5-port-verify`)를 통과해야 한다.
+   - **근거**: 롱전략 AI 모델(AUC 0.82)이 Python의 비표준 연산 방식에 최적화됨 (2026-03-13 확정)
 
 ### 🧠 피처 엔지니어링 실전 14원칙 (A+B+C 검증 반영, 2026-03-09)
 > DB 쿼리: `SELECT * FROM StrategyRule WHERE type IN ('피처엔지니어링','모델구조','모니터링')`
@@ -135,7 +140,7 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 5. **세션 인코딩**: 트리 모델 One-hot, 딥러닝 sin/cos 순환 인코딩
 6. **LightGBM 단조 제약 (방안 B)** ★: `monotone_constraints` +1=19/-1=8. **단독 FAIL** — pct 조합 필수
 7. **레짐 인식 피처 (방안 C)**: 4개 피처, 신호 수 +25% 효과. 학습 스크립트 내 Close로 계산
-8. **롱/숏 분리 학습**: Stage A→B→C(비대칭 임계치 **롱>0.25** 숏>0.70)→D(매크로 게이트키퍼)
+8. **롱/숏 분리 학습**: Stage A→B→C(비대칭 임계치 **롱≥0.20** 숏>0.70)→D(매크로 게이트키퍼)
 9. **PSI 안정성 모니터링**: PSI>0.25 → 재학습 트리거. Fold간 SHAP 급변 시 과적합 경고
 10. **다중 검정 보정**: BH-FDR 필수. SHAP Top-60도 5-Fold 중 3회 이상 등장만 채택
 11. **이상치 처리**: Winsorization 상하 1~5%. **X_train 기준 percentile만 적용** (미래 누수 방지)
@@ -144,20 +149,47 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 14. **Z-score 한계 인식** ★: 레짐 전환 시 스케일 불일치 → **pct240 병행 필수** (실측: 33%→52%)
 
 ### 부가 원칙
-- **🎯 확정된 전략 구조 (2026-03-09 갱신)**: AI A+B+C 통합 모델 → TrailingStop 청산
+- **🎯 확정된 롱전략 구조 (2026-03-12 확정)**: AI A+B+C 통합 모델 + 피라미딩 → CE2 TrailingStop 청산
   ```
-  AI:      진입 여부 — 80개 피처(SHAP Top-60+pct16+regime4) + 단조제약 + FP페널티
-           AUC=0.8298, OOS 3/3 PASS, M30>35+thr=0.25 승률 **56.3%**
-  청산:    TrailingStopVx 전담 (고정 TP 사용 안 함)
+  ┌─────────────────────────────────────────────────────────┐
+  │ 1차 진입 (Entry)                                        │
+  ├─────────────────────────────────────────────────────────┤
+  │ 모델:     AI A+B+C (model_long_ABC.txt)                 │
+  │ 임계치:   prob ≥ 0.20                                    │
+  │ SL:       ATR14(Wilder) × 7.0 (진입 시 고정)            │
+  │ 청산:     CE2 TrailingStop (lookback=22, mult=4.5)       │
+  │           수익 < 4×ATR → CE 리셋, 다음 파동 대기         │
+  │           수익 ≥ 4×ATR → 전체 일괄 청산                  │
+  │ 랏:       MoneyManageVx (1% 리스크)                     │
+  │ M30 필터: 시뮬 ❌ 미사용 / 실전 ADXMTF_M30_DiPlus > 35  │
+  ├─────────────────────────────────────────────────────────┤
+  │ 피라미딩 (Addon)                                        │
+  ├─────────────────────────────────────────────────────────┤
+  │ 모델:     AI Model_AddOn (model_addon_ABC.txt)          │
+  │ 임계치:   prob ≥ 0.40                                   │
+  │ 최대:     3회 추가 (정피라미드: 1.0 → 0.50 → 0.25)      │
+  │ 간격:     최소 5봉 경과                                  │
+  │ 전제:     미실현수익 ≥ 1.5 × ATR (1차 대비)              │
+  │ SL:       1차 진입 SL 유지 (B/E 이동 없음, be_mode=None) │
+  │ 청산:     1차와 동일 — CE2 발동 시 전체 일괄 청산         │
+  ├─────────────────────────────────────────────────────────┤
+  │ 검증 실적 (OOS 시뮬레이션)                               │
+  ├─────────────────────────────────────────────────────────┤
+  │ 결과:     739건, 승률 77.9%, 총PnL +6,688               │
+  │ Uplift:   피라미딩 없음 대비 +61.8%                      │
+  └─────────────────────────────────────────────────────────┘
   ```
-- **🛡️ 확정된 실전 하드 필터 (2026-03-08 갱신)**: `ADXMTF_M30_DiPlus > 35`
-  - 하향추세/추세전환 초반 롱 진입 차단 (AI 모델 앞단에 적용)
-  - 근거: 필터 없음 8.0% → 적용 후 승률 **13.3%** (+5.3%p, TP=2.0ATR 기준)
-  - 3-Barrier 라벨링은 이 필터 없이 전봉 생성 (AI가 피처로 학습)
-- **ATR 동적 배리어 라벨링**: 배리어: TP=ATR×**2.0** / SL=ATR×2.5 / 30봉 / TP판정=Close. **실전 청산은 TrailingStopVx 전담**.
+
 - **메가 피처 풀 투입**: ~817개 피처 전부 투입 → Spearman 0.85 Pruning(419개) → SHAP Top-60 자동 선별.
 - **Walk-Forward 3단계 검증**: Step 1(6개월) → Step 2(1.5년) → Step 3(최대). 모두 승률 ≥45% 통과 필수.
 - **Safety**: `GetLastError()` 필수, StopLoss/TrailingStop 항상 포함.
+
+### 🔬 숏전략 개발 시 검증 필수 항목 (Deferred Experiment)
+- [ ] **PctRank A/B 비교 실험**:
+  - A안: `s.shift(1).rolling(w).rank()` (1-bar 지연 랭크, 롱전략과 동일)
+  - B안: 현재봉 정확 랭크 (`Idx(0)` 기준)
+  - 각각 학습 → 승률/PF 비교 후 채택
+  - 근거: 롱전략에서 A안(지연)이 AUC 0.82 달성. 오류가 스무딩 효과로 기여했을 가능성 있음
 
 ### 🗄️ VectorDB 임베딩 10대 원칙
 > DB 쿼리: `SELECT * FROM StrategyRule WHERE type = '임베딩전략'`
@@ -175,13 +207,9 @@ MT5 기술적 지표 + Yahoo Finance + FRED 매크로 수집
 10. **fat-tail 피처 허용**: CHV StdDev 등 std 5~15는 금 시장 정상. 2계층 보존, 학습 시 Winsorization
 
 ## 4. Environment & Tools
-**Build Command**:
-```bash
-"C:\Program Files\MetaTrader5\MetaEditor64.exe" /compile:"<file.mq5>" /log
-```
+
 **Key Paths**:
 - **Root**: `.../MQL5`
-- **MT5**: `C:\Program Files\MetaTrader5\terminal64.exe`
 - **Python**: `C:\Python314\python.exe`
 - **MCP Server**: `{PROJECT_ROOT}\mcp-metatrader5-server`
 
