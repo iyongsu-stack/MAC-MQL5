@@ -15,7 +15,20 @@ import re
 from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(__file__))
-from cypher_cli import run_cypher
+try:
+    from session_memory import _run_cypher as neo4j_run_cypher
+except ImportError:
+    neo4j_run_cypher = None
+
+def run_cypher(query):
+    """Neo4j HTTP API를 통해 Cypher 실행. 실패 시 예외 발생"""
+    if not neo4j_run_cypher:
+        raise Exception("session_memory._run_cypher 모듈 로드 실패")
+    
+    res = neo4j_run_cypher(query)
+    if res.get("status") == "ERROR":
+        raise Exception(f"DB 쿼리 오류: {res.get('errors')}")
+    return res
 
 KST = timezone(timedelta(hours=9))
 
